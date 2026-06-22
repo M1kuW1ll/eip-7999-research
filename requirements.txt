@@ -1,0 +1,10 @@
+pandas
+numpy
+matplotlib
+PyYAML
+jupyter
+clickhouse-connect
+pyarrow
+python-dotenv
+rlp
+requests

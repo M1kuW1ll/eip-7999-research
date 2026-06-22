@@ -1,0 +1,17 @@
+# Local credentials
+.env
+.env.*
+!.env.example
+
+# Pulled datasets and generated binary outputs
+data/
+*.parquet
+
+# Python/Jupyter local state
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Local editor and OS state
+.idea/
+.DS_Store

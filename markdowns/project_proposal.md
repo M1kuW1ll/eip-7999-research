@@ -163,6 +163,11 @@ A concrete on-ramp (we'll adjust):
 
 ---
 
+## Tool
+
+- BAL size estimation: https://github.com/nerolation/eth-bal-analysis. Use RLP encoding with something called FLAG?
+- Xatu dataset: https://ethpandaops.io/data/xatu/schema/cbt/
+
 ## References
 
 **EIPs**
