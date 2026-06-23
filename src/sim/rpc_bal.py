@@ -15,11 +15,13 @@ import rlp
 BEACON_ROOT_CONTRACT = "0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02"
 HISTORY_CONTRACT = "0x0000F90827F1C53a10cb7A02335B175320002935"
 HISTORY_BUFFER_LENGTH = 8191
+BAL_SEMANTICS = "eip7928_pre_tx_post_indices_v1"
 
 
 @dataclass(frozen=True)
 class RpcBalSummary:
     block_number: int
+    bal_semantics: str
     include_reads: bool
     include_system_changes: bool
     calldata_source: str
@@ -41,9 +43,10 @@ class RpcBalSummary:
     code_changes_rlp_bytes: int
     account_shell_rlp_bytes: int
 
-    def as_dict(self) -> dict[str, int | bool]:
+    def as_dict(self) -> dict[str, Any]:
         return {
             "block_number": self.block_number,
+            "bal_semantics": self.bal_semantics,
             "include_reads": self.include_reads,
             "include_system_changes": self.include_system_changes,
             "calldata_source": self.calldata_source,
@@ -228,6 +231,10 @@ def bytes32(value: str | None) -> bytes:
     return hex_to_bytes(value, 32)
 
 
+def block_access_index_for_tx(tx_index: int) -> int:
+    return int(tx_index) + 1
+
+
 def extract_balances(state: dict[str, Any]) -> dict[str, int]:
     balances = {}
     for address, changes in state.items():
@@ -308,13 +315,13 @@ def process_storage_changes(
                     if bytes32(pre_value) != bytes32(post_value):
                         block_writes.setdefault(address_key, {}).setdefault(
                             slot_key, []
-                        ).append((tx_index, post_value))
+                        ).append((block_access_index_for_tx(tx_index), post_value))
                     elif include_reads and slot_key not in block_writes.get(address_key, {}):
                         block_read_slots.setdefault(address_key, set()).add(slot_key)
                 elif pre_value is not None and slot not in post_storage:
                     zero_value = "0x" + "00" * 32
                     block_writes.setdefault(address_key, {}).setdefault(slot_key, []).append(
-                        (tx_index, zero_value)
+                        (block_access_index_for_tx(tx_index), zero_value)
                     )
 
     if include_reads and block_reads is not None:
@@ -378,7 +385,9 @@ def process_balance_changes(
                 if sender:
                     sender_pre = parse_int(balance_touches_for_tx.get(sender), 0)
                     builder.add_balance_change(
-                        canonical_address(sender), tx_index, sender_pre - total_gas_fee
+                        canonical_address(sender),
+                        block_access_index_for_tx(tx_index),
+                        sender_pre - total_gas_fee,
                     )
                     touched_addresses.add(sender)
                     processed.add(sender)
@@ -386,7 +395,7 @@ def process_balance_changes(
                     fee_pre = parse_int(balance_touches_for_tx.get(fee_recipient), 0)
                     builder.add_balance_change(
                         canonical_address(fee_recipient),
-                        tx_index,
+                        block_access_index_for_tx(tx_index),
                         fee_pre + priority_fee_total,
                     )
                     touched_addresses.add(fee_recipient)
@@ -421,7 +430,7 @@ def process_balance_changes(
         for address in balance_delta:
             builder.add_balance_change(
                 canonical_address(address),
-                tx_index,
+                block_access_index_for_tx(tx_index),
                 post_balances.get(address, 0),
             )
             processed.add(address.lower())
@@ -452,7 +461,11 @@ def process_code_changes(
             pre_code = pre_state.get(address, {}).get("code")
             post_code = post_state.get(address, {}).get("code")
             if post_code and post_code != "0x" and post_code != pre_code:
-                builder.add_code_change(canonical_address(address), tx_index, hex_to_bytes(post_code))
+                builder.add_code_change(
+                    canonical_address(address),
+                    block_access_index_for_tx(tx_index),
+                    hex_to_bytes(post_code),
+                )
 
 
 def process_nonce_changes(
@@ -469,7 +482,11 @@ def process_nonce_changes(
             pre_nonce = parse_int(pre_state.get(address, {}).get("nonce"), 0)
             post_nonce = parse_int(post_state.get(address, {}).get("nonce"), 0)
             if post_nonce > pre_nonce:
-                builder.add_nonce_change(canonical_address(address), tx_index, post_nonce)
+                builder.add_nonce_change(
+                    canonical_address(address),
+                    block_access_index_for_tx(tx_index),
+                    post_nonce,
+                )
 
 
 def process_system_contract_changes(
@@ -478,8 +495,36 @@ def process_system_contract_changes(
     builder: RlpBalBuilder,
     tx_count: int,
 ) -> None:
-    system_tx_index = tx_count
+    pre_execution_index = 0
+    post_execution_index = tx_count + 1
     block_number = parse_int(block_info.get("number"), 0)
+
+    parent_beacon_root = block_info.get("parentBeaconBlockRoot")
+    if parent_beacon_root:
+        timestamp = parse_int(block_info.get("timestamp"), 0)
+        timestamp_slot = timestamp % HISTORY_BUFFER_LENGTH
+        root_slot = timestamp_slot + HISTORY_BUFFER_LENGTH
+        builder.add_storage_write(
+            canonical_address(BEACON_ROOT_CONTRACT),
+            timestamp_slot.to_bytes(32, "big"),
+            pre_execution_index,
+            timestamp.to_bytes(32, "big"),
+        )
+        builder.add_storage_write(
+            canonical_address(BEACON_ROOT_CONTRACT),
+            root_slot.to_bytes(32, "big"),
+            pre_execution_index,
+            hex_to_bytes(parent_beacon_root, 32),
+        )
+
+    parent_hash = block_info.get("parentHash")
+    if parent_hash and block_number > 0:
+        builder.add_storage_write(
+            canonical_address(HISTORY_CONTRACT),
+            ((block_number - 1) % HISTORY_BUFFER_LENGTH).to_bytes(32, "big"),
+            pre_execution_index,
+            hex_to_bytes(parent_hash, 32),
+        )
 
     withdrawals = block_info.get("withdrawals", []) or []
     if withdrawals:
@@ -505,29 +550,9 @@ def process_system_contract_changes(
                 pre_balance = parent_balances.get(address, 0)
             builder.add_balance_change(
                 canonical,
-                system_tx_index,
+                post_execution_index,
                 pre_balance + amount_wei,
             )
-
-    parent_beacon_root = block_info.get("parentBeaconBlockRoot")
-    if parent_beacon_root:
-        timestamp = parse_int(block_info.get("timestamp"), 0)
-        slot = timestamp % HISTORY_BUFFER_LENGTH
-        builder.add_storage_write(
-            canonical_address(BEACON_ROOT_CONTRACT),
-            slot.to_bytes(32, "big"),
-            system_tx_index,
-            hex_to_bytes(parent_beacon_root, 32),
-        )
-
-    parent_hash = block_info.get("parentHash")
-    if parent_hash and block_number > 0:
-        builder.add_storage_write(
-            canonical_address(HISTORY_CONTRACT),
-            (block_number - 1).to_bytes(32, "big"),
-            system_tx_index,
-            hex_to_bytes(parent_hash, 32),
-        )
 
 
 def summarize_accounts(
@@ -583,6 +608,7 @@ def summarize_accounts(
 
     return RpcBalSummary(
         block_number=block_number,
+        bal_semantics=BAL_SEMANTICS,
         include_reads=include_reads,
         include_system_changes=include_system_changes,
         calldata_source=calldata_source,

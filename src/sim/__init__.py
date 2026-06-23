@@ -8,12 +8,13 @@ from .config import (
     load_config,
 )
 from .replay import replay
-from .rpc_bal import build_rpc_bal_for_block, build_rpc_bal_from_traces
+from .rpc_bal import BAL_SEMANTICS, build_rpc_bal_for_block, build_rpc_bal_from_traces
 from .synthetic import BlockDemand, generate_synthetic_blocks
 from .xatu_calldata import query_xatu_calldata_by_block
 
 __all__ = [
     "BandwidthConfig",
+    "BAL_SEMANTICS",
     "BlockDemand",
     "ExecutionStateConfig",
     "SimulatorConfig",
