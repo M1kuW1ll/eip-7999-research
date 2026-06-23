@@ -1,8 +1,8 @@
 # Bandwidth Limit Report
 
-## Summary
+## Scope
 
-This milestone derives the bandwidth vector limit only. In the current staged
+This analysis derives the bandwidth vector limit only. In the current staged
 model, state growth remains under EIP-8037. In the final project, state growth
 may become its own EIP-7999 resource with its own base fee, target, and limit.
 
@@ -18,15 +18,29 @@ It does not choose bandwidth targets or target ratios yet; those are later
 fee-market tuning parameters. It also does not decide whether state growth later
 becomes a separate EIP-7999 vector.
 
-The current conclusion is:
+What this analysis covers:
 
-- Without an EIP-8279-like runtime BAL-byte floor, the worst-case payload is a
-  mixed transaction: nonzero calldata plus many cold SLOADs that create BAL
-  bytes.
-- With an EIP-8279-like runtime BAL-byte floor, the worst case collapses back
-  toward the simple uniform byte bound: roughly `execution_gas_limit / 64`.
+- This analysis uses Toni's `conservative_p90` propagation fit as the main
+  planning metric for candidate bandwidth caps. Under that metric, the safe
+  byte caps range from `2,552,761` bytes for a 3s effective window
+  factor to `5,448,143` bytes for a 6s effective window.
+- Assume a 3s effective propagation window, the safety 
+  propagation cap is `2,552,761` bytes. Using 16 gas per byte, 
+  the corresponding bandwidth gas limit for EIP-7999 is `40,844,176` (~40M).
 - Recent historical blocks in the 50-block sample are far below the candidate
-  propagation-derived byte caps.
+  propagation-derived byte caps. 
+- We also do a stress test against the worst-case payload size. The worst-case payload 
+  for Glamsterdam is a mixed transaction: nonzero
+  calldata plus many cold SLOADs that create BAL bytes. 
+  With an EIP-8279-like runtime BAL-byte floor, the worst case collapses back
+  toward the simple uniform byte bound: roughly `execution_gas_limit / 64`.
+- Without EIP-8279, the worst-case payload for Glamsterdam with a 60M execution gas limit
+  is way below the safety cap. However, if execution gas limit is raised to 100M, 
+  the worst-case payload size can exceed the safety cap 
+  under 3s effective propagation window.
+- With EIP-8279, the model suggests the execution gas limit could rise to around 150M 
+  while still keeping the worst-case payload size below the 3s effective propagation cap.
+
 
 ## Files Added
 
@@ -42,7 +56,229 @@ notebooks/0.4-bandwidth-limit-scenarios.ipynb
 tests/test_bandwidth_limits.py
 ```
 
-## Scenario Definitions
+## Propagation Safety Analysis
+
+The bandwidth limit starts from the propagation question:
+
+```text
+How many calldata + BAL bytes can safely fit in the execution payload?
+```
+
+The first output of this milestone is therefore the safe byte cap and its
+candidate EIP-7999 gas-limit mapping. The Glamsterdam worst-case analysis comes
+after this: it asks which adversarial payloads would challenge those caps.
+
+### Propagation Fits
+
+The propagation model is:
+
+```text
+propagation_time_ms = intercept_ms + slope_ms_per_kb * (payload_bytes / 1024)
+```
+
+These fits are taken from Toni's
+[`nerolation/glamsterdam-worst-case-block-size`](https://github.com/nerolation/glamsterdam-worst-case-block-size)
+analysis. They are empirical propagation models, not EIP constants.
+
+The source notebook in Toni's repo is `payload_propagation.ipynb`; the
+interactive summary is `worst_case_block.html`. The analysis estimates
+block-only propagation time on Ethereum mainnet using:
+
+- `beacon_api_eth_v1_events_block_gossip`, the raw gossipsub receipt event for
+  beacon blocks;
+- `block_total_bytes_compressed` from `canonical_beacon_block`, meaning the
+  snappy-compressed beacon block size, not blob sidecars;
+- propagation time measured as `pXX_ms - min_ms`, where `min_ms` is the earliest
+  observer receipt in the slot and `pXX_ms` is the XXth percentile observer
+  receipt;
+- roughly 125 observer sentries over the last 12 months, about 2.6M slots;
+- separate fits for MEV-boost and locally-built blocks.
+
+This simulator uses the MEV-boost p90 fits because MEV-boost is the dominant
+block source and p90 is the safety-relevant tail metric. For this report,
+`conservative_p90` is the main planning metric for deriving candidate
+bandwidth caps. `empirical_p90` is still useful as a comparison point, but it is
+not the cap-setting metric in the tables below.
+
+Two p90 fits are implemented:
+
+```text
+empirical_p90:
+  slope_ms_per_kb = 0.443
+  intercept_ms    = 569
+
+conservative_p90:
+  slope_ms_per_kb = 1.061
+  intercept_ms    = 355
+```
+
+In Toni's `worst_case_block.html`, these appear as:
+
+```text
+empirical p90    = 0.443 * kb + 569
+conservative p90 = 1.061 * kb + 355
+```
+
+Interpretation:
+
+- `empirical_p90` is Toni's primary / realistic p90 fit. It bins blocks by
+  compressed size, takes the median spread inside each bin, and fits a weighted
+  line with weight `sqrt(size_kb)`. This tail-emphasized weighting lets the
+  observed large-block tail drive the extrapolation.
+- `conservative_p90` uses the same data but changes the weighting to
+  `sqrt(n * size_kb)`. This restores more influence to the dense small-block
+  region and produces a steeper, more pessimistic extrapolation for MiB-scale
+  blocks. **It is the main metric used for the safe-cap and compatibility results
+  in this analysis.**
+- `p90` means the 90th-percentile propagation estimate across observers after
+  the first observer saw the block. It is not a hard maximum.
+
+Important unit caveat: Toni's model is fitted against compressed beacon block
+size. This analysis feeds it _raw_ `calldata + RLP BAL` bytes. That is deliberate:
+we do not want the bandwidth limit to depend on guessed Snappy ratios for BALs.
+For BAL-heavy blocks this may overstate propagation cost relative to compressed
+bytes, but it keeps the limit derivation byte-denominated and avoids making
+compression a hidden assumption.
+
+### Safety Factor
+
+The safe byte cap is:
+
+```text
+usable_ms = window_ms * safety_factor
+safe_bytes = ((usable_ms - intercept_ms) / slope_ms_per_kb) * 1024
+```
+
+`safety_factor = 0.75` means we only spend 75% of the nominal propagation window
+on the modeled payload propagation time.
+
+This haircut leaves room for:
+
+- timing games,
+- model error in the linear propagation fit,
+- network variance beyond p90,
+- implementation overhead not captured by payload size alone,
+- ePBS/attestation timing uncertainty,
+- future BAL encoding or execution-payload details changing slightly.
+
+The notebook also computes `safety_factor = 1.0`, which is the no-haircut case.
+That should be treated as an upper bound, not the safer recommendation.
+
+### Propagation Safety Caps
+
+Using `conservative_p90`, the main planning metric for this report:
+
+| window ms | safety factor | safe bandwidth bytes |
+|---:|---:|---:|
+| 3,000 | 0.75 | 1,828,916 |
+| 3,000 | 1.00 | 2,552,761 |
+| 4,000 | 0.75 | 2,552,761 |
+| 4,000 | 1.00 | 3,517,888 |
+| 6,000 | 0.75 | 4,000,452 |
+| 6,000 | 1.00 | 5,448,143 |
+
+Notice that `3,000ms` at `1.0` equals `4,000ms` at `0.75`, because both give
+`3,000ms` of usable propagation budget.
+
+### Candidate EIP-7999 Bandwidth Limits
+
+The propagation cap is fundamentally byte-denominated. To express that cap as an
+EIP-7999 resource gas limit, the module currently uses a conservative
+`16 gas/byte` conversion:
+
+```text
+bandwidth_gas_limit = 16 * safe_bandwidth_bytes
+```
+
+This assumes the limiting payload is made entirely of bytes charged like
+nonzero calldata. BAL bytes are also assigned `16 gas/byte` in this meter, so a
+BAL byte consumes the same bandwidth-resource budget as a nonzero calldata byte.
+Without a separate pricing mechanism, pricing BAL bytes like nonzero calldata avoids
+giving BAL payload a cheaper path through the bandwidth dimension.
+
+This is only the resource-limit conversion — calldata gas
+can still preserve the EIP-7999-style zero/nonzero split. 
+
+```text
+calldata_gas = 4 * zero_calldata_bytes + 16 * nonzero_calldata_bytes
+BAL_gas      = 16 * BAL_bytes
+```
+
+
+Candidate limits only:
+
+| window ms | safety factor | safe bytes | bandwidth gas limit |
+|---:|---:|---:|---:|
+| 3,000 | 0.75 | 1,828,916 | 29,262,656 |
+| 3,000 | 1.00 | 2,552,761 | 40,844,176 |
+| 4,000 | 0.75 | 2,552,761 | 40,844,176 |
+| 4,000 | 1.00 | 3,517,888 | 56,286,208 |
+| 6,000 | 0.75 | 4,000,452 | 64,007,232 |
+| 6,000 | 1.00 | 5,448,143 | 87,170,288 |
+
+The target is intentionally omitted here. The target ratio controls fee-market
+responsiveness and expected utilization, so it should be chosen later using
+replay metrics such as volatility, excess accumulation, and limit-hit behavior.
+
+### Historical 50-Block Compatibility
+
+The current historical sample is:
+
+```text
+data/xatu_calldata_50_blocks_22886891_22886940.csv
+```
+
+It uses:
+
+```text
+include_reads = True
+include_system_changes = True
+```
+
+Totals:
+
+```text
+blocks           = 50
+calldata bytes   = 2,850,752
+BAL bytes        = 4,580,589
+bandwidth bytes  = 7,431,341
+max block bytes  = 281,981 at block 22,886,907
+```
+
+For the representative cap:
+
+```text
+fit               = conservative_p90
+window_ms         = 4,000
+safety_factor     = 0.75
+safe bytes        = 2,552,761
+gas limit         = 40,844,176
+```
+
+Historical usage is far below the limit:
+
+```text
+max bandwidth bytes / limit  = 11.05%
+mean bandwidth bytes / limit = 5.82%
+
+max bandwidth gas / limit    = 9.16%
+mean bandwidth gas / limit   = 4.71%
+```
+
+This 50-block sample is much too small to recommend final parameters, but it is
+useful as a pipeline sanity check: real recent blocks are far below the
+candidate propagation caps, while the adversarial no-8279 worst case can get
+close enough to matter.
+
+## Worst-Case Stress Tests
+
+After deriving propagation caps, the second question is whether the payload size after
+Glamsterdam can challenge these propagation safety caps. 
+This is where `worst_case.py` fits in: it models adversarial
+`calldata + BAL` payloads under different execution gas limits and gas
+schedules.
+
+### Scenario Definitions
 
 The two implemented schedules are:
 
@@ -65,9 +301,9 @@ The first scenario is the Glamsterdam setting from Toni's repository and
 analysis: EIP-7976, EIP-7981, and EIP-7928 are present, but no EIP-8279 runtime
 BAL-byte floor is assumed.
 
-The second scenario is not the scheduled Glamsterdam baseline. It is a
-forward-looking Hegota/EIP-7999 sensitivity case: if EIP-7999 targets Hegota,
-and if an EIP-8279-like runtime BAL-byte floor is included in the same fork,
+The second scenario is a
+forward-looking Hegota/EIP-7999 sensitivity case: if EIP-7999 and EIP-8279 runtime
+BAL-byte floor both target Hegota,
 then BAL bytes become protected by the same kind of 64 gas/byte floor as
 calldata-heavy payloads. It is worth modeling because it materially changes the
 worst-case bandwidth limit.
@@ -84,7 +320,15 @@ floor that binds for calldata-heavy transactions. The worst-case calldata-only
 strategy is intentionally calldata-heavy, so the model uses the 64 gas/byte
 floor there.
 
-## Worst-Case Strategy Model
+Note on EIP-8131: 
+EIP-8131 can be viewed as a draft consolidation of the static transaction-content
+floor: calldata, access-list entries, EIP-7702 authorization tuples, and blob
+versioned hashes all receive the same 64 gas/byte floor treatment. For the
+calldata + access-list parts of this report, EIP-8131 is conceptually equivalent 
+to the EIP-7976 + EIP-7981 static-content-floor framing. EIP-8131 does not price 
+runtime BAL bytes created by execution opcodes. That is the role of EIP-8279.
+
+### Worst-Case Strategy Model
 
 The code does not add independent maximum calldata and independent maximum BAL.
 Instead, it optimizes total payload under one gas limit.
@@ -110,11 +354,10 @@ tx_base_gas + max(
 where `runtime_bal_floor_component` is `0` without 8279 and
 `64 * bal_bytes` with 8279.
 
-## How The Worst-Case Bytes Are Produced
+### How The Worst-Case Bytes Are Produced
 
 The worst-case table reports the `calldata_bytes` and `BAL bytes` from the
-winning strategy for each gas limit and schedule. These are not historical
-measurements and not independent maxima. They are the bytes created by the best
+winning strategy for each gas limit and schedule. They are the bytes created by the best
 adversarial construction under the gas constraint.
 
 For `all_calldata_nonzero`, the construction is:
@@ -195,65 +438,17 @@ BAL bytes = 0
 total_payload_bytes = 937,171
 ```
 
-## Propagation Fits
-
-The propagation model is:
+The important result is the gap between the two scenarios. At 60M gas:
 
 ```text
-propagation_time_ms = intercept_ms + slope_ms_per_kb * (payload_bytes / 1024)
+no_8279 payload   = 1,622,610 bytes
+plus_8279 payload =   937,171 bytes
 ```
 
-Two p90 fits are implemented:
+So without the BAL-byte floor, mixed state-access workload can increase the
+worst-case payload by roughly 73% over pure calldata at 60M gas.
 
-```text
-empirical_p90:
-  slope_ms_per_kb = 0.443
-  intercept_ms    = 569
-
-conservative_p90:
-  slope_ms_per_kb = 1.061
-  intercept_ms    = 355
-```
-
-These values come from Toni's Glamsterdam worst-case block-size analysis. In the
-local copy of `worst_case_block.html`, the fits are:
-
-```text
-empirical p90    = 0.443 * kb + 569
-conservative p90 = 1.061 * kb + 355
-```
-
-Interpretation:
-
-- `empirical_p90` is the realistic p90 fit from the payload-deadline analysis.
-- `conservative_p90` is a steeper sensitivity fit. It gives less byte budget for
-  the same propagation window.
-- `p90` means the 90th-percentile propagation estimate. It is not a hard maximum.
-
-## Safety Factor
-
-The safe byte cap is:
-
-```text
-usable_ms = window_ms * safety_factor
-safe_bytes = ((usable_ms - intercept_ms) / slope_ms_per_kb) * 1024
-```
-
-`safety_factor = 0.75` means we only spend 75% of the nominal propagation window
-on the modeled payload propagation time.
-
-This is a deliberate haircut, not a measured constant. It leaves room for:
-
-- model error in the linear propagation fit,
-- network variance beyond p90,
-- implementation overhead not captured by payload size alone,
-- ePBS/attestation timing uncertainty,
-- future BAL encoding or execution-payload details changing slightly.
-
-The notebook also computes `safety_factor = 1.0`, which is the no-haircut case.
-That should be treated as an upper bound, not the safer recommendation.
-
-## Worst-Case Results
+### Worst-Case Results
 
 | gas limit | scenario | best strategy | calldata bytes | BAL bytes | total payload bytes | MiB | gas used |
 |---:|---|---|---:|---:|---:|---:|---:|
@@ -270,121 +465,25 @@ That should be treated as an upper bound, not the safer recommendation.
 | 450,000,000 | glamsterdam_no_8279 | mixed calldata + cold SLOADs | 7,030,921 | 5,142,580 | 12,173,501 | 11.610 | 449,999,944 |
 | 450,000,000 | glamsterdam_plus_8279 | all calldata | 7,030,921 | 0 | 7,030,921 | 6.705 | 449,999,944 |
 
-The important result is the gap between the two scenarios. At 60M gas:
 
-```text
-no_8279 payload   = 1,622,610 bytes
-plus_8279 payload =   937,171 bytes
-```
 
-So without the BAL-byte floor, mixed state-access workload can increase the
-worst-case payload by roughly 73% over pure calldata at 60M gas.
-
-## Propagation Safety Caps
-
-Using `conservative_p90`:
-
-| window ms | safety factor | safe bandwidth bytes |
-|---:|---:|---:|
-| 3,000 | 0.75 | 1,828,916 |
-| 3,000 | 1.00 | 2,552,761 |
-| 4,000 | 0.75 | 2,552,761 |
-| 4,000 | 1.00 | 3,517,888 |
-| 6,000 | 0.75 | 4,000,452 |
-| 6,000 | 1.00 | 5,448,143 |
-
-Notice that `3,000ms` at `1.0` equals `4,000ms` at `0.75`, because both give
-`3,000ms` of usable propagation budget.
-
-## Candidate EIP-7999 Bandwidth Limits
-
-For now, the module maps byte caps to EIP-7999 gas using:
-
-```text
-bandwidth_gas_limit = 16 * safe_bandwidth_bytes
-```
-
-Candidate limits only:
-
-| window ms | safety factor | safe bytes | bandwidth gas limit |
-|---:|---:|---:|---:|
-| 3,000 | 0.75 | 1,828,916 | 29,262,656 |
-| 3,000 | 1.00 | 2,552,761 | 40,844,176 |
-| 4,000 | 0.75 | 2,552,761 | 40,844,176 |
-| 4,000 | 1.00 | 3,517,888 | 56,286,208 |
-| 6,000 | 0.75 | 4,000,452 | 64,007,232 |
-| 6,000 | 1.00 | 5,448,143 | 87,170,288 |
-
-The target is intentionally omitted here. The target ratio controls fee-market
-responsiveness and expected utilization, so it should be chosen later using
-replay metrics such as volatility, excess accumulation, and limit-hit behavior.
-
-## Historical 50-Block Compatibility
-
-The current historical sample is:
-
-```text
-data/xatu_calldata_50_blocks_22886891_22886940.csv
-```
-
-It uses:
-
-```text
-include_reads = True
-include_system_changes = True
-```
-
-Totals:
-
-```text
-blocks           = 50
-calldata bytes   = 2,850,752
-BAL bytes        = 4,580,589
-bandwidth bytes  = 7,431,341
-max block bytes  = 281,981 at block 22,886,907
-```
-
-For the representative cap:
-
-```text
-fit               = conservative_p90
-window_ms         = 4,000
-safety_factor     = 0.75
-safe bytes        = 2,552,761
-gas limit         = 40,844,176
-```
-
-Historical usage is far below the limit:
-
-```text
-max bandwidth bytes / limit  = 11.05%
-mean bandwidth bytes / limit = 5.82%
-
-max bandwidth gas / limit    = 9.16%
-mean bandwidth gas / limit   = 4.71%
-```
-
-This 50-block sample is much too small to recommend final parameters, but it is
-useful as a pipeline sanity check: real recent blocks are far below the
-candidate propagation caps, while the adversarial no-8279 worst case can get
-close enough to matter.
 
 ## Interpretation
 
 The bandwidth-limit question has two separate parts:
 
-1. What is the adversarial worst-case payload size under Glamsterdam? How does
+1. What byte payload is safe for propagation given an effective propagation time window?
+2. What is the adversarial worst-case payload size under Glamsterdam? How does
    it change with different execution gas limits, with or without EIP-8279?
-2. What byte payload is safe for propagation?
 
-The first part is handled by `worst_case.py`. The second part is handled by
-`propagation.py`. Then `eip7999_metering.py` maps the byte cap into a resource
-gas limit.
+The safe-cap part is handled by `propagation.py`, and `eip7999_metering.py`
+maps the byte cap into a resource gas limit. The Glamsterdam stress-test part
+is handled by `worst_case.py`.
 
-The reason the first question still matters is that execution activity can also
-produce payload bytes. A cold SLOAD consumes execution gas, but it also adds a
-storage key to the BAL, and that BAL is part of the execution payload. So even
-if the final EIP-7999 model has a separate bandwidth resource, the two
+The reason the second question still matters is that execution activity can
+also produce payload bytes. A cold SLOAD consumes execution gas, but it also
+adds a storage key to the BAL, and that BAL is part of the execution payload.
+So even if the final EIP-7999 model has a separate bandwidth resource, the two
 constraints interact:
 
 ```text
@@ -409,6 +508,7 @@ calldata bytes =   937,150
 BAL bytes      =   685,460
 total payload  = 1,622,610 bytes
 ```
+**This size is still considered safe under a 3s effective propagation window (1,622,610 < 2,552,761 bytes).**
 
 With EIP-8279, BAL bytes also contribute to the 64 gas/byte floor accumulator.
 That makes the mixed SLOAD strategy stop beating the pure calldata strategy. At
@@ -420,26 +520,23 @@ BAL bytes      = 0
 total payload  = 937,171 bytes
 ```
 
-The reason to analyze this is that, under some execution gas limits and without
+**The reason to analyze this is that, under some execution gas limits and without
 EIP-8279, a block can be valid under the execution gas limit while exceeding the
-safe propagation cap. For example:
+safe propagation cap.** For example:
 
 ```text
 100M execution gas, Glamsterdam without EIP-8279:
   worst-case payload = 2,704,751 bytes
 
-conservative p90 cap, 4s window, 0.75 safety factor:
+conservative p90 cap, 3s effective window (or 4s window with 0.75 safety factor):
   safe payload cap = 2,552,761 bytes
 
-conservative p90 cap, 3s window, 1.0 safety factor:
-  safe payload cap = 2,552,761 bytes
 ```
 
-So the 100M no-8279 worst case is larger than that propagation cap:
+**So the worst case payload size under 100M
+execution gas limit without EIP-8279
+is larger than the safety propagation cap.**
 
-```text
-2,704,751 > 2,552,761
-```
 
 Without a separate bandwidth resource, that block can still be considered valid
 if it fits the execution gas limit. The propagation risk is not directly
@@ -472,23 +569,25 @@ still fits the execution gas dimension.
 
 The most important design implication so far is:
 
-```text
-For Glamsterdam, the bandwidth resource limit must account for mixed calldata
-plus state-access BAL payloads.
+- Assume a 3s effective propagation window, the safety propagation cap is 
+2,552,761 bytes. The corresponding bandwidth gas limit for EIP-7999 
+is 40,844,176 (~40M).
 
-If EIP-8279 goes together with EIP-7999, the worst-case payload is much easier
-to reason about because calldata and BAL bytes both face the same 64 gas/byte
-floor.
-```
+- For Glamsterdam with a 60M execution gas limit, the worst-case payload 
+is way below this cap. If execution gas limit is raised to 100M, the worst-case
+payload size can exceed the safety cap under 3s effective propagation window.
+
+- With EIP-8279, the model suggests the execution gas limit could rise to around 150M 
+while still keeping the worst-case payload size below the 3s effective propagation cap.
+
 
 ## Caveats
 
 - The propagation fits are imported from Toni's analysis, not re-estimated here.
-- The conservative fit is a sensitivity case, not a proof of worst-case network
-  behavior.
-- `safety_factor = 0.75` is a policy haircut. It should be varied, not treated
-  as magic.
-- The 50-block historical sample is only a small smoke test.
+- `conservative_p90` is the report's main planning metric, but it is still a
+  conservative sensitivity fit, not a proof of worst-case network behavior.
+- `safety_factor = 0.75` is a policy haircut and can be varied.
+- The 50-block historical sample is only a small test.
 - The current worst-case model is intentionally simple: single transaction,
   cold account plus cold SLOADs, and raw byte payload accounting.
 
