@@ -204,27 +204,11 @@ jupyter notebook notebooks/0.7-state-growth-rpc-calibration.ipynb
 jupyter notebook notebooks/0.8-glamsterdam-only-baseline.ipynb
 ```
 
-## Credentials
+## Local Configuration
 
-Store credentials in a local `.env` file at the repo root. Do not commit real
-credentials to notebooks, YAML, markdown, or git history.
-
-```bash
-cp .env.example .env
-```
-
-The notebooks expect variables such as:
-
-```text
-CLICKHOUSE_USER=...
-CLICKHOUSE_PASSWORD=...
-CLICKHOUSE_CBT_HOST=clickhouse-cbt.xatu.ethpandaops.io
-ETHNODEOPS_API_KEY=...
-ETHNODEOPS_RPC=https://erigon.mainnet.rpc.ethnodeops.xyz
-```
-
-`ETHNODEOPS_RPC` is pinned to Erigon mainnet for BAL/state trace work so the
-trace-derived read/write sets are stable across runs.
+Some notebooks need private data-service or RPC credentials. Keep those in a
+local `.env` file and do not commit real credentials to notebooks, YAML,
+markdown, or git history.
 
 ## Important Modeling Notes
 
