@@ -174,10 +174,17 @@ class RlpBalBuilder:
         return accounts
 
 
-def rpc_call(rpc_url: str, method: str, params: list[Any], timeout: int = 180) -> Any:
+def rpc_call(
+    rpc_url: str,
+    method: str,
+    params: list[Any],
+    timeout: int = 180,
+    headers: dict[str, str] | None = None,
+) -> Any:
     response = requests.post(
         rpc_url,
         json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params},
+        headers=headers,
         timeout=timeout,
     )
     response.raise_for_status()
@@ -187,7 +194,12 @@ def rpc_call(rpc_url: str, method: str, params: list[Any], timeout: int = 180) -
     return data.get("result")
 
 
-def fetch_block_trace(rpc_url: str, block_number: int, diff_mode: bool) -> list[dict[str, Any]]:
+def fetch_block_trace(
+    rpc_url: str,
+    block_number: int,
+    diff_mode: bool,
+    headers: dict[str, str] | None = None,
+) -> list[dict[str, Any]]:
     return rpc_call(
         rpc_url,
         "debug_traceBlockByNumber",
@@ -196,6 +208,7 @@ def fetch_block_trace(rpc_url: str, block_number: int, diff_mode: bool) -> list[
             {"tracer": "prestateTracer", "tracerConfig": {"diffMode": diff_mode}},
         ],
         timeout=300,
+        headers=headers,
     )
 
 
@@ -494,6 +507,7 @@ def process_system_contract_changes(
     block_info: dict[str, Any],
     builder: RlpBalBuilder,
     tx_count: int,
+    rpc_headers: dict[str, str] | None = None,
 ) -> None:
     pre_execution_index = 0
     post_execution_index = tx_count + 1
@@ -539,6 +553,7 @@ def process_system_contract_changes(
                         "eth_getBalance",
                         [address, hex(block_number - 1)],
                         timeout=60,
+                        headers=rpc_headers,
                     )
                 )
         for withdrawal in withdrawals:
@@ -641,6 +656,7 @@ def build_rpc_bal_from_traces(
     receipts: list[dict[str, Any]],
     calldata_bytes: int,
     rpc_url: str | None = None,
+    rpc_headers: dict[str, str] | None = None,
     include_reads: bool = True,
     include_system_changes: bool = False,
 ) -> RpcBalResult:
@@ -682,6 +698,7 @@ def build_rpc_bal_from_traces(
             block_info,
             builder,
             tx_count=len(block_info.get("transactions", [])),
+            rpc_headers=rpc_headers,
         )
 
     if include_reads:
@@ -713,13 +730,40 @@ def build_rpc_bal_for_block(
     block_number: int,
     *,
     calldata_bytes: int,
+    rpc_headers: dict[str, str] | None = None,
     include_reads: bool = True,
     include_system_changes: bool = False,
 ) -> RpcBalResult:
-    diff_trace = fetch_block_trace(rpc_url, block_number, diff_mode=True)
-    full_trace = fetch_block_trace(rpc_url, block_number, diff_mode=False) if include_reads else None
-    receipts = rpc_call(rpc_url, "eth_getBlockReceipts", [hex(block_number)], timeout=120)
-    block_info = rpc_call(rpc_url, "eth_getBlockByNumber", [hex(block_number), True], timeout=120)
+    diff_trace = fetch_block_trace(
+        rpc_url,
+        block_number,
+        diff_mode=True,
+        headers=rpc_headers,
+    )
+    full_trace = (
+        fetch_block_trace(
+            rpc_url,
+            block_number,
+            diff_mode=False,
+            headers=rpc_headers,
+        )
+        if include_reads
+        else None
+    )
+    receipts = rpc_call(
+        rpc_url,
+        "eth_getBlockReceipts",
+        [hex(block_number)],
+        timeout=120,
+        headers=rpc_headers,
+    )
+    block_info = rpc_call(
+        rpc_url,
+        "eth_getBlockByNumber",
+        [hex(block_number), True],
+        timeout=120,
+        headers=rpc_headers,
+    )
     return build_rpc_bal_from_traces(
         block_number=block_number,
         diff_trace=diff_trace,
@@ -728,6 +772,7 @@ def build_rpc_bal_for_block(
         receipts=receipts,
         calldata_bytes=calldata_bytes,
         rpc_url=rpc_url,
+        rpc_headers=rpc_headers,
         include_reads=include_reads,
         include_system_changes=include_system_changes,
     )

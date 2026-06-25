@@ -15,13 +15,10 @@ def query_xatu_calldata_by_block(
     """Return Xatu calldata bytes plus zero/nonzero validation columns.
 
     `calldata_bytes` is sourced from the canonical beacon payload transaction
-    table. `calldata_zero_bytes`, `calldata_nonzero_bytes`, and
-    `calldata_gas_7999` are sourced from `execution_transaction` only after
-    checking that its raw byte total and transaction count match the beacon
-    payload.
+    table. `calldata_zero_bytes`, `calldata_nonzero_bytes`, and `calldata_gas`
+    are sourced from `execution_transaction` only after checking that its raw
+    byte total and transaction count match the beacon payload.
 
-    `canonical_execution_transaction` is included only as a row-count diagnostic
-    because it can be sparse for some historical blocks.
     """
 
     blocks = sorted({int(block) for block in block_numbers})
@@ -37,12 +34,13 @@ def query_xatu_calldata_by_block(
                 "execution_calldata_bytes",
                 "calldata_zero_bytes",
                 "calldata_nonzero_bytes",
-                "calldata_gas_7999",
+                "calldata_gas",
                 "calldata_gas_source",
                 "execution_rows_n_input_positive",
                 "execution_matches_beacon",
-                "canonical_execution_tx_rows",
-                "canonical_execution_matches_beacon",
+                "blob_versioned_hash_count",
+                "blob_versioned_hash_bytes",
+                "blob_versioned_hash_gas",
             ]
         )
 
@@ -119,7 +117,8 @@ def query_xatu_calldata_by_block(
             sum(n_input_bytes) AS execution_calldata_bytes,
             sum(n_input_zero_bytes) AS execution_zero_bytes,
             sum(n_input_nonzero_bytes) AS execution_nonzero_bytes,
-            sum(4 * n_input_zero_bytes + 16 * n_input_nonzero_bytes) AS execution_calldata_gas_7999
+            sum(4 * n_input_zero_bytes + 16 * n_input_nonzero_bytes) AS execution_calldata_gas,
+            sum(length(blob_hashes)) AS blob_versioned_hash_count
         FROM default.execution_transaction FINAL
         WHERE meta_network_name = {network:String}
           AND block_hash IN {block_hashes:Array(FixedString(66))}
@@ -128,25 +127,23 @@ def query_xatu_calldata_by_block(
         """,
         parameters={"network": network, "block_hashes": block_hashes},
     )
-
-    canonical_execution = client.query_df(
-        """
-        SELECT
-            block_number,
-            count() AS canonical_execution_tx_rows
-        FROM default.canonical_execution_transaction FINAL
-        WHERE meta_network_name = {network:String}
-          AND block_number IN {blocks:Array(UInt64)}
-        GROUP BY block_number
-        ORDER BY block_number
-        """,
-        parameters={"network": network, "blocks": blocks},
-    )
+    if execution.empty:
+        execution = pd.DataFrame(
+            columns=[
+                "block_number",
+                "execution_tx_rows",
+                "execution_rows_n_input_positive",
+                "execution_calldata_bytes",
+                "execution_zero_bytes",
+                "execution_nonzero_bytes",
+                "execution_calldata_gas",
+                "blob_versioned_hash_count",
+            ]
+        )
 
     out = (
         out.rename(columns={"calldata_bytes": "beacon_calldata_bytes"})
         .merge(execution, on="block_number", how="left")
-        .merge(canonical_execution, on="block_number", how="left")
     )
 
     numeric_cols = [
@@ -155,8 +152,8 @@ def query_xatu_calldata_by_block(
         "execution_calldata_bytes",
         "execution_zero_bytes",
         "execution_nonzero_bytes",
-        "execution_calldata_gas_7999",
-        "canonical_execution_tx_rows",
+        "execution_calldata_gas",
+        "blob_versioned_hash_count",
     ]
     out[numeric_cols] = out[numeric_cols].fillna(0).astype("int64")
     out["calldata_bytes"] = out["beacon_calldata_bytes"]
@@ -164,13 +161,9 @@ def query_xatu_calldata_by_block(
         (out["execution_tx_rows"] == out["n_txs_from_payload"])
         & (out["execution_calldata_bytes"] == out["beacon_calldata_bytes"])
     )
-    out["canonical_execution_matches_beacon"] = (
-        out["canonical_execution_tx_rows"] == out["n_txs_from_payload"]
-    )
-
     out["calldata_zero_bytes"] = pd.Series(pd.NA, index=out.index, dtype="Int64")
     out["calldata_nonzero_bytes"] = pd.Series(pd.NA, index=out.index, dtype="Int64")
-    out["calldata_gas_7999"] = pd.Series(pd.NA, index=out.index, dtype="Int64")
+    out["calldata_gas"] = pd.Series(pd.NA, index=out.index, dtype="Int64")
     out["calldata_gas_source"] = "unavailable"
 
     execution_mask = out["execution_matches_beacon"]
@@ -180,10 +173,12 @@ def query_xatu_calldata_by_block(
     out.loc[execution_mask, "calldata_nonzero_bytes"] = out.loc[
         execution_mask, "execution_nonzero_bytes"
     ]
-    out.loc[execution_mask, "calldata_gas_7999"] = out.loc[
-        execution_mask, "execution_calldata_gas_7999"
+    out.loc[execution_mask, "calldata_gas"] = out.loc[
+        execution_mask, "execution_calldata_gas"
     ]
     out.loc[execution_mask, "calldata_gas_source"] = "execution_transaction"
+    out["blob_versioned_hash_bytes"] = out["blob_versioned_hash_count"] * 32
+    out["blob_versioned_hash_gas"] = out["blob_versioned_hash_bytes"] * 64
 
     return out[
         [
@@ -196,11 +191,12 @@ def query_xatu_calldata_by_block(
             "execution_calldata_bytes",
             "calldata_zero_bytes",
             "calldata_nonzero_bytes",
-            "calldata_gas_7999",
+            "calldata_gas",
             "calldata_gas_source",
             "execution_rows_n_input_positive",
             "execution_matches_beacon",
-            "canonical_execution_tx_rows",
-            "canonical_execution_matches_beacon",
+            "blob_versioned_hash_count",
+            "blob_versioned_hash_bytes",
+            "blob_versioned_hash_gas",
         ]
     ].sort_values("block_number").reset_index(drop=True)

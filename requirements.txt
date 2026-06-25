@@ -8,3 +8,5 @@ pyarrow
 python-dotenv
 rlp
 requests
+eth-keys
+eth-utils

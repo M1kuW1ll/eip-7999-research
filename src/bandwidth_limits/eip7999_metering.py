@@ -10,6 +10,8 @@ class BandwidthMeteringConfig:
     safe_bandwidth_bytes: int
     gas_per_safe_byte: int = 16
     bal_gas_per_byte: int = 16
+    authorization_tuple_gas_per_byte: int = 64
+    blob_hash_gas_per_byte: int = 64
     calldata_mode: str = "eip7999_4_16"
     bal_mode: str = "fixed_16_per_byte"
 
@@ -19,6 +21,8 @@ def compute_bandwidth_usage(
     calldata_nonzero_bytes: int,
     bal_rlp_bytes: int,
     config: BandwidthMeteringConfig,
+    authorization_tuple_bytes: int = 0,
+    blob_versioned_hash_bytes: int = 0,
 ) -> dict:
     calldata_bytes = int(calldata_zero_bytes) + int(calldata_nonzero_bytes)
 
@@ -35,9 +39,25 @@ def compute_bandwidth_usage(
         raise ValueError(f"Unknown bal_mode: {config.bal_mode}")
 
     bal_gas = int(config.bal_gas_per_byte) * int(bal_rlp_bytes)
+    authorization_tuple_gas = int(config.authorization_tuple_gas_per_byte) * int(
+        authorization_tuple_bytes
+    )
+    blob_versioned_hash_gas = int(config.blob_hash_gas_per_byte) * int(
+        blob_versioned_hash_bytes
+    )
 
-    bandwidth_bytes = calldata_bytes + int(bal_rlp_bytes)
-    bandwidth_gas = calldata_gas + bal_gas
+    bandwidth_bytes = (
+        calldata_bytes
+        + int(bal_rlp_bytes)
+        + int(authorization_tuple_bytes)
+        + int(blob_versioned_hash_bytes)
+    )
+    bandwidth_gas = (
+        calldata_gas
+        + bal_gas
+        + authorization_tuple_gas
+        + blob_versioned_hash_gas
+    )
 
     bandwidth_gas_limit = int(config.gas_per_safe_byte) * int(
         config.safe_bandwidth_bytes
@@ -48,6 +68,10 @@ def compute_bandwidth_usage(
         "calldata_gas": calldata_gas,
         "bal_bytes": int(bal_rlp_bytes),
         "bal_gas": bal_gas,
+        "authorization_tuple_bytes": int(authorization_tuple_bytes),
+        "authorization_tuple_gas": authorization_tuple_gas,
+        "blob_versioned_hash_bytes": int(blob_versioned_hash_bytes),
+        "blob_versioned_hash_gas": blob_versioned_hash_gas,
         "bandwidth_bytes": bandwidth_bytes,
         "bandwidth_gas": bandwidth_gas,
         "bandwidth_gas_limit": bandwidth_gas_limit,

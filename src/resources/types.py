@@ -65,12 +65,16 @@ class BandwidthCounts:
     calldata_zero_bytes: int = 0
     calldata_nonzero_bytes: int = 0
     bal_rlp_bytes: int = 0
+    authorization_tuple_bytes: int = 0
+    blob_versioned_hash_bytes: int = 0
 
     def __post_init__(self) -> None:
         values = [
             self.calldata_zero_bytes,
             self.calldata_nonzero_bytes,
             self.bal_rlp_bytes,
+            self.authorization_tuple_bytes,
+            self.blob_versioned_hash_bytes,
         ]
         if any(value < 0 for value in values):
             raise ValueError("bandwidth counts must be non-negative")
@@ -107,5 +111,9 @@ class BlockResourceUsage:
     calldata_gas: int
     bal_rlp_bytes: int
     bal_gas: int
+    authorization_tuple_bytes: int
+    authorization_tuple_gas: int
+    blob_versioned_hash_bytes: int
+    blob_versioned_hash_gas: int
     bandwidth_bytes: int
     bandwidth_gas: int

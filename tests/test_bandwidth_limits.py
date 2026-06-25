@@ -63,13 +63,23 @@ class BandwidthMeteringTest(unittest.TestCase):
             calldata_zero_bytes=10,
             calldata_nonzero_bytes=20,
             bal_rlp_bytes=30,
+            authorization_tuple_bytes=108,
+            blob_versioned_hash_bytes=32,
             config=BandwidthMeteringConfig(safe_bandwidth_bytes=1_000),
         )
 
-        self.assertEqual(result["bandwidth_bytes"], 60)
+        self.assertEqual(result["bandwidth_bytes"], 200)
         self.assertEqual(result["calldata_gas"], 4 * 10 + 16 * 20)
         self.assertEqual(result["bal_gas"], 16 * 30)
-        self.assertEqual(result["bandwidth_gas"], result["calldata_gas"] + result["bal_gas"])
+        self.assertEqual(result["authorization_tuple_gas"], 64 * 108)
+        self.assertEqual(result["blob_versioned_hash_gas"], 64 * 32)
+        self.assertEqual(
+            result["bandwidth_gas"],
+            result["calldata_gas"]
+            + result["bal_gas"]
+            + result["authorization_tuple_gas"]
+            + result["blob_versioned_hash_gas"],
+        )
         self.assertEqual(result["bandwidth_gas_limit"], 16 * 1_000)
 
 

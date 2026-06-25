@@ -20,6 +20,35 @@ known RPC sample for block `22,886,891`, while `debug_traceBlockByNumber` with
 `prestateTracer` can recover the full trace-derived read set used by
 `eth-bal-analysis`.
 
+BAL `storage_reads` is not a simple count of `SLOAD`
+opcodes and it is not a per-transaction sum. It is a block-level set of storage
+slots that were needed for execution but were not already represented as storage
+writes in the block-level BAL. To construct it correctly, the builder needs the
+full set of touched storage locations, then it performs block-level set logic:
+
+```text
+storage_reads = storage slots touched/read by execution
+                minus storage slots written in the same block
+```
+
+That means a dataset table can be directionally useful but still too narrow for
+BAL sizing if it does not expose every storage location that `prestateTracer`
+would include in the transaction's accessed pre-state. In block `22,886,891`,
+the local RPC/Toni path has `801` BAL storage-read slots. The Xatu-direct path
+found only `527` unique storage-read slots before applying the read-not-written
+filter, and only `302` after applying the BAL builder's filter. This is why the
+Xatu-direct BAL estimate was short by thousands of bytes even when storage
+writes and code bytes matched well.
+
+RPC is better for this part because `prestateTracer` in non-diff mode returns
+the pre-state for accounts and storage locations touched by execution, including
+slots that do not end up with a post-state diff. The RPC builder can then union
+those slots at block level and subtract written slots in the same way as
+`eth-bal-analysis`. The Xatu table may be intentionally narrower, may represent
+a different trace-derived read concept, or may omit cases that matter for BAL
+construction. Until that semantic gap is resolved, Xatu is safe for calldata,
+but RPC is the safer source for BAL bytes.
+
 ## Implementation
 
 The primary notebooks are:
@@ -52,7 +81,7 @@ canonical_beacon_block_execution_transaction.call_data_size
 
 Zero/nonzero byte counts and calldata gas come from Xatu `execution_transaction`
 after checking that it matches the beacon payload transaction count and raw byte
-total. `canonical_execution_transaction` is diagnostic only.
+total.
 
 The BAL output column comes from RPC:
 
@@ -68,8 +97,8 @@ bandwidth_rlp_bytes = xatu_calldata_bytes + rpc_bal_rlp_bytes
 
 ## Calibration Block 22,886,891
 
-Using Xatu for calldata and `ALCHEMY_RPC` for BAL, the joined path successfully
-ran for block `22,886,891`.
+Using Xatu for calldata and ethnodeops Erigon mainnet RPC for BAL, the joined
+path successfully ran for block `22,886,891`.
 
 ```text
 calldata_bytes      = 63,197  (Xatu)
@@ -109,8 +138,6 @@ For block `22,886,891`:
 
 ```text
 Toni local sample, with reads              = 119,857 bytes
-old transaction-only comparison mode       = 119,920 bytes  (+63)
-old system-change mode                     = 120,405 bytes  (+548)
 updated EIP-7928-style system-change mode  = 120,499 bytes  (+642)
 ```
 
@@ -159,6 +186,46 @@ The calibration deltas against the local `with_reads` samples are:
 22886893:  88,311 vs  87,790  delta +521
 ```
 
+## RPC Provider Cross-Check
+
+The BAL builder supports RPC headers, so ethnodeops is now the default BAL RPC
+provider. The notebook uses:
+
+```text
+ETHNODEOPS_RPC=https://erigon.mainnet.rpc.ethnodeops.xyz
+X-API-Key: <ETHNODEOPS_API_KEY from .env>
+```
+
+The non-client-specific mainnet endpoint also works:
+
+```text
+https://mainnet.rpc.ethnodeops.xyz
+```
+
+For blocks `22,886,892` and `22,886,893`, ethnodeops matched the current CSV
+exactly. For block `22,886,891`, the load-balanced endpoint produced a slightly
+smaller BAL:
+
+```text
+ethnodeops Erigon / current CSV:   120,499 bytes, 801 storage reads
+ethnodeops load-balanced result:   120,367 bytes, 797 storage reads
+delta:                             -132 bytes, -4 storage reads
+```
+
+Client-specific ethnodeops endpoints explain the difference:
+
+```text
+geth.mainnet.rpc.ethnodeops.xyz    -> 120,367 bytes, 797 storage reads
+erigon.mainnet.rpc.ethnodeops.xyz  -> 120,499 bytes, 801 storage reads
+reth.mainnet.rpc.ethnodeops.xyz    -> 120,499 bytes, 801 storage reads
+```
+
+So the remaining provider difference is not from calldata, system changes,
+balance changes, nonce changes, or code changes. It is a small
+client-dependent `prestateTracer` storage-read difference. For reproducible BAL
+calibration runs, the notebook pins Erigon instead of relying on a
+load-balanced archive endpoint.
+
 So the right interpretation is:
 
 ```text
@@ -169,10 +236,6 @@ include_system_changes = True
   Use as the main simulator estimate for calldata + EIP-7928 BAL bandwidth.
 ```
 
-There is still a small transaction-only mismatch (`+63` bytes for block
-`22,886,891`). That appears to come from finer trace/encoding differences such
-as nonce handling, not from the storage-read path.
-
 For calldata validation, `execution_transaction` aligns with the beacon payload
 table on block `22,886,891`:
 
@@ -182,22 +245,6 @@ execution_transaction rows    = 268
 beacon calldata bytes         = 63,197
 execution_transaction bytes   = 63,197
 ```
-
-`canonical_execution_transaction` is sparse here:
-
-```text
-canonical_execution_transaction rows  = 184
-canonical_execution_transaction bytes = 46,677
-```
-
-A broader sample is saved in:
-
-```text
-data/xatu_calldata_table_validation_sample.csv
-```
-
-In that sample, `canonical_execution_transaction` matched only 3 of 18 checked
-blocks. We do not use it for calldata gas pricing.
 
 ## System Changes
 
