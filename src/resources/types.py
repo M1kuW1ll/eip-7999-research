@@ -65,6 +65,7 @@ class BandwidthCounts:
     calldata_zero_bytes: int = 0
     calldata_nonzero_bytes: int = 0
     bal_rlp_bytes: int = 0
+    tx_access_list_bytes: int = 0
     authorization_tuple_bytes: int = 0
     blob_versioned_hash_bytes: int = 0
 
@@ -73,6 +74,7 @@ class BandwidthCounts:
             self.calldata_zero_bytes,
             self.calldata_nonzero_bytes,
             self.bal_rlp_bytes,
+            self.tx_access_list_bytes,
             self.authorization_tuple_bytes,
             self.blob_versioned_hash_bytes,
         ]
@@ -111,6 +113,8 @@ class BlockResourceUsage:
     calldata_gas: int
     bal_rlp_bytes: int
     bal_gas: int
+    tx_access_list_bytes: int
+    tx_access_list_gas: int
     authorization_tuple_bytes: int
     authorization_tuple_gas: int
     blob_versioned_hash_bytes: int

@@ -10,6 +10,7 @@ class BandwidthMeteringConfig:
     safe_bandwidth_bytes: int
     gas_per_safe_byte: int = 16
     bal_gas_per_byte: int = 16
+    tx_access_list_gas_per_byte: int = 64
     authorization_tuple_gas_per_byte: int = 64
     blob_hash_gas_per_byte: int = 64
     calldata_mode: str = "eip7999_4_16"
@@ -21,6 +22,7 @@ def compute_bandwidth_usage(
     calldata_nonzero_bytes: int,
     bal_rlp_bytes: int,
     config: BandwidthMeteringConfig,
+    tx_access_list_bytes: int = 0,
     authorization_tuple_bytes: int = 0,
     blob_versioned_hash_bytes: int = 0,
 ) -> dict:
@@ -39,6 +41,9 @@ def compute_bandwidth_usage(
         raise ValueError(f"Unknown bal_mode: {config.bal_mode}")
 
     bal_gas = int(config.bal_gas_per_byte) * int(bal_rlp_bytes)
+    tx_access_list_gas = int(config.tx_access_list_gas_per_byte) * int(
+        tx_access_list_bytes
+    )
     authorization_tuple_gas = int(config.authorization_tuple_gas_per_byte) * int(
         authorization_tuple_bytes
     )
@@ -49,12 +54,14 @@ def compute_bandwidth_usage(
     bandwidth_bytes = (
         calldata_bytes
         + int(bal_rlp_bytes)
+        + int(tx_access_list_bytes)
         + int(authorization_tuple_bytes)
         + int(blob_versioned_hash_bytes)
     )
     bandwidth_gas = (
         calldata_gas
         + bal_gas
+        + tx_access_list_gas
         + authorization_tuple_gas
         + blob_versioned_hash_gas
     )
@@ -68,6 +75,8 @@ def compute_bandwidth_usage(
         "calldata_gas": calldata_gas,
         "bal_bytes": int(bal_rlp_bytes),
         "bal_gas": bal_gas,
+        "tx_access_list_bytes": int(tx_access_list_bytes),
+        "tx_access_list_gas": tx_access_list_gas,
         "authorization_tuple_bytes": int(authorization_tuple_bytes),
         "authorization_tuple_gas": authorization_tuple_gas,
         "blob_versioned_hash_bytes": int(blob_versioned_hash_bytes),

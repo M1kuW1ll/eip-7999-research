@@ -106,6 +106,7 @@ class BlockResourceUsageTest(unittest.TestCase):
                 calldata_zero_bytes=10,
                 calldata_nonzero_bytes=20,
                 bal_rlp_bytes=30,
+                tx_access_list_bytes=84,
                 authorization_tuple_bytes=108,
                 blob_versioned_hash_bytes=32,
             )
@@ -113,10 +114,14 @@ class BlockResourceUsageTest(unittest.TestCase):
 
         self.assertEqual(result["calldata_gas"], 360)
         self.assertEqual(result["bal_gas"], 480)
+        self.assertEqual(result["tx_access_list_gas"], 84 * 64)
         self.assertEqual(result["authorization_tuple_gas"], 108 * 64)
         self.assertEqual(result["blob_versioned_hash_gas"], 32 * 64)
-        self.assertEqual(result["bandwidth_gas"], 360 + 480 + 108 * 64 + 32 * 64)
-        self.assertEqual(result["bandwidth_bytes"], 200)
+        self.assertEqual(
+            result["bandwidth_gas"],
+            360 + 480 + 84 * 64 + 108 * 64 + 32 * 64,
+        )
+        self.assertEqual(result["bandwidth_bytes"], 284)
 
     def test_block_resource_usage_wrapper(self):
         result = compute_block_resource_usage(
@@ -133,6 +138,7 @@ class BlockResourceUsageTest(unittest.TestCase):
                     calldata_zero_bytes=10,
                     calldata_nonzero_bytes=20,
                     bal_rlp_bytes=30,
+                    tx_access_list_bytes=84,
                     authorization_tuple_bytes=108,
                     blob_versioned_hash_bytes=32,
                 ),
@@ -147,10 +153,14 @@ class BlockResourceUsageTest(unittest.TestCase):
         self.assertEqual(result.calldata_bytes, 30)
         self.assertEqual(result.calldata_gas, 360)
         self.assertEqual(result.bal_gas, 480)
+        self.assertEqual(result.tx_access_list_gas, 84 * 64)
         self.assertEqual(result.authorization_tuple_gas, 108 * 64)
         self.assertEqual(result.blob_versioned_hash_gas, 32 * 64)
-        self.assertEqual(result.bandwidth_bytes, 200)
-        self.assertEqual(result.bandwidth_gas, 360 + 480 + 108 * 64 + 32 * 64)
+        self.assertEqual(result.bandwidth_bytes, 284)
+        self.assertEqual(
+            result.bandwidth_gas,
+            360 + 480 + 84 * 64 + 108 * 64 + 32 * 64,
+        )
 
 
 if __name__ == "__main__":

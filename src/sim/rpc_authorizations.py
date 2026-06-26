@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections.abc import Sequence
 from dataclasses import dataclass
 import time
@@ -214,9 +215,9 @@ def fetch_authorization_records_for_transactions(
     network_chain_id: int = MAINNET_CHAIN_ID,
     max_retries: int = 3,
     retry_sleep_seconds: float = 1.0,
+    max_workers: int = 16,
 ) -> pd.DataFrame:
-    rows: list[dict[str, Any]] = []
-    for tx in transactions.to_dict("records"):
+    def fetch_transaction_records(tx: dict[str, Any]) -> list[dict[str, Any]]:
         tx_hash = normalize_hash(tx["tx_hash"])
         last_error: Exception | None = None
         rpc_tx = None
@@ -238,6 +239,7 @@ def fetch_authorization_records_for_transactions(
         if rpc_tx is None:
             raise RuntimeError(f"RPC returned no transaction for {tx_hash}")
         auth_list = rpc_tx.get("authorizationList") or []
+        tx_rows: list[dict[str, Any]] = []
         for auth_index, auth in enumerate(auth_list):
             record = decode_authorization_record(
                 block_number=int(tx["block_number"]),
@@ -247,31 +249,49 @@ def fetch_authorization_records_for_transactions(
                 auth=auth,
                 network_chain_id=network_chain_id,
             )
-            rows.append(record.as_dict())
+            tx_rows.append(record.as_dict())
+        return tx_rows
 
+    rows: list[dict[str, Any]] = []
+    txs = transactions.to_dict("records")
+    workers = max(1, int(max_workers))
+    if workers == 1:
+        for tx in txs:
+            rows.extend(fetch_transaction_records(tx))
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {executor.submit(fetch_transaction_records, tx): tx for tx in txs}
+            for future in as_completed(futures):
+                rows.extend(future.result())
+
+    columns = [
+        "block_number",
+        "tx_index",
+        "tx_hash",
+        "auth_index",
+        "chain_id",
+        "target_address",
+        "nonce",
+        "y_parity",
+        "r",
+        "s",
+        "authority",
+        "is_clear",
+        "chain_id_valid",
+        "nonce_valid",
+        "signature_low_s",
+        "recovered",
+        "recover_error",
+        "authorization_tuple_rlp_bytes",
+        "authorization_tuple_8131_bytes",
+    ]
+    if not rows:
+        return pd.DataFrame(columns=columns)
     return pd.DataFrame(
         rows,
-        columns=[
-            "block_number",
-            "tx_index",
-            "tx_hash",
-            "auth_index",
-            "chain_id",
-            "target_address",
-            "nonce",
-            "y_parity",
-            "r",
-            "s",
-            "authority",
-            "is_clear",
-            "chain_id_valid",
-            "nonce_valid",
-            "signature_low_s",
-            "recovered",
-            "recover_error",
-            "authorization_tuple_rlp_bytes",
-            "authorization_tuple_8131_bytes",
-        ],
+        columns=columns,
+    ).sort_values(["block_number", "tx_index", "auth_index"]).reset_index(
+        drop=True
     )
 
 
@@ -358,6 +378,7 @@ def fetch_authorization_data_for_blocks(
     network: str = "mainnet",
     rpc_headers: dict[str, str] | None = None,
     network_chain_id: int = MAINNET_CHAIN_ID,
+    max_workers: int = 16,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     type4_transactions = query_xatu_type4_transactions(
         raw_client,
@@ -369,6 +390,7 @@ def fetch_authorization_data_for_blocks(
         type4_transactions,
         rpc_headers=rpc_headers,
         network_chain_id=network_chain_id,
+        max_workers=max_workers,
     )
     summary = summarize_authorizations_by_block(
         records,

@@ -6,8 +6,8 @@ accounted separately instead of being collapsed into one gas counter.
 The current project focus is:
 
 - execution gas
-- bandwidth gas, currently modeled from calldata + BAL bytes + authorization
-  list bytes + blob versioned hashes
+- bandwidth gas, currently modeled from calldata + BAL bytes + transaction
+  access-list bytes + authorization-list bytes + blob versioned hashes
 - state-growth gas under EIP-8037
 
 The project is staged deliberately. First, derive bandwidth limits from payload
@@ -43,8 +43,8 @@ execution/state:
   execution_state_used = max(execution_gas_used, state_gas_used)
 
 bandwidth:
-  bandwidth_gas = calldata_gas + BAL_gas + authorization_tuple_gas
-                  + blob_versioned_hash_gas
+  bandwidth_gas = calldata_gas + BAL_gas + tx_access_list_gas
+                  + authorization_tuple_gas + blob_versioned_hash_gas
 ```
 
 Bandwidth then gets its own EIP-7999-style target, limit, excess accumulator,
@@ -63,6 +63,8 @@ Bandwidth content is built from Xatu plus RPC:
 - Xatu `execution_transaction` supplies zero/nonzero calldata byte counts for
   calldata gas.
 - RPC `debug_traceBlockByNumber` with `prestateTracer` supplies BAL RLP bytes.
+- RPC full transaction objects supply EIP-2930/EIP-7981 transaction access-list
+  address and storage-key counts.
 - RPC transaction fetches supply EIP-7702 authorization lists.
 - Xatu transaction fields supply blob versioned hash counts.
 
@@ -73,16 +75,20 @@ The main bandwidth output is produced by
 bandwidth_payload_bytes =
   calldata_bytes
   + bal_rlp_bytes
+  + tx_access_list_bytes
   + authorization_tuple_rlp_bytes
   + blob_versioned_hash_bytes
 
 bandwidth_gas =
   calldata_gas
   + bal_gas
+  + tx_access_list_gas
   + authorization_tuple_gas
   + blob_versioned_hash_gas
 ```
 
+For transaction access lists, `tx_access_list_bytes` follows EIP-7981:
+`20 * address_entries + 32 * storage_keys`, charged at `64 gas/byte`.
 For authorization tuples, the notebook keeps both actual RLP bytes and the
 EIP-8131 fixed-size/floor-accounting byte count.
 
@@ -124,7 +130,7 @@ notebooks/
     propagation caps and Glamsterdam worst-case bandwidth limits
 
   0.5-bandwidth-content.ipynb
-    calldata + BAL + authorization-list + blob-hash bandwidth table
+    calldata + BAL + access-list + authorization-list + blob-hash bandwidth table
 
   0.6-state-growth-xatu.ipynb
     scalable Xatu state-growth estimator

@@ -22,6 +22,7 @@ STATE_BYTES_PER_DELEGATION_INDICATOR = 23
 CALLDATA_ZERO_GAS_PER_BYTE = 4
 CALLDATA_NONZERO_GAS_PER_BYTE = 16
 DEFAULT_BAL_GAS_PER_BYTE = 16
+DEFAULT_TX_ACCESS_LIST_GAS_PER_BYTE = 64
 DEFAULT_AUTHORIZATION_TUPLE_GAS_PER_BYTE = 64
 DEFAULT_BLOB_HASH_GAS_PER_BYTE = 64
 
@@ -129,11 +130,14 @@ def compute_calldata_gas(
 def compute_bandwidth_usage(
     counts: BandwidthCounts,
     bal_gas_per_byte: int = DEFAULT_BAL_GAS_PER_BYTE,
+    tx_access_list_gas_per_byte: int = DEFAULT_TX_ACCESS_LIST_GAS_PER_BYTE,
     authorization_tuple_gas_per_byte: int = DEFAULT_AUTHORIZATION_TUPLE_GAS_PER_BYTE,
     blob_hash_gas_per_byte: int = DEFAULT_BLOB_HASH_GAS_PER_BYTE,
 ) -> dict[str, int]:
     if bal_gas_per_byte < 0:
         raise ValueError("bal_gas_per_byte must be non-negative")
+    if tx_access_list_gas_per_byte < 0:
+        raise ValueError("tx_access_list_gas_per_byte must be non-negative")
     if authorization_tuple_gas_per_byte < 0:
         raise ValueError("authorization_tuple_gas_per_byte must be non-negative")
     if blob_hash_gas_per_byte < 0:
@@ -147,6 +151,9 @@ def compute_bandwidth_usage(
         calldata_nonzero_bytes=counts.calldata_nonzero_bytes,
     )
     bal_gas = int(bal_gas_per_byte) * int(counts.bal_rlp_bytes)
+    tx_access_list_gas = int(tx_access_list_gas_per_byte) * int(
+        counts.tx_access_list_bytes
+    )
     authorization_tuple_gas = int(authorization_tuple_gas_per_byte) * int(
         counts.authorization_tuple_bytes
     )
@@ -156,12 +163,14 @@ def compute_bandwidth_usage(
     bandwidth_bytes = (
         calldata_bytes
         + int(counts.bal_rlp_bytes)
+        + int(counts.tx_access_list_bytes)
         + int(counts.authorization_tuple_bytes)
         + int(counts.blob_versioned_hash_bytes)
     )
     bandwidth_gas = (
         calldata_gas
         + bal_gas
+        + tx_access_list_gas
         + authorization_tuple_gas
         + blob_versioned_hash_gas
     )
@@ -173,6 +182,8 @@ def compute_bandwidth_usage(
         "calldata_gas": calldata_gas,
         "bal_rlp_bytes": int(counts.bal_rlp_bytes),
         "bal_gas": bal_gas,
+        "tx_access_list_bytes": int(counts.tx_access_list_bytes),
+        "tx_access_list_gas": tx_access_list_gas,
         "authorization_tuple_bytes": int(counts.authorization_tuple_bytes),
         "authorization_tuple_gas": authorization_tuple_gas,
         "blob_versioned_hash_bytes": int(counts.blob_versioned_hash_bytes),
@@ -186,6 +197,7 @@ def compute_block_resource_usage(
     block: BlockResourceCounts,
     cpsb: int,
     bal_gas_per_byte: int = DEFAULT_BAL_GAS_PER_BYTE,
+    tx_access_list_gas_per_byte: int = DEFAULT_TX_ACCESS_LIST_GAS_PER_BYTE,
     authorization_tuple_gas_per_byte: int = DEFAULT_AUTHORIZATION_TUPLE_GAS_PER_BYTE,
     blob_hash_gas_per_byte: int = DEFAULT_BLOB_HASH_GAS_PER_BYTE,
 ) -> BlockResourceUsage:
@@ -194,6 +206,7 @@ def compute_block_resource_usage(
     bandwidth = compute_bandwidth_usage(
         block.bandwidth,
         bal_gas_per_byte=bal_gas_per_byte,
+        tx_access_list_gas_per_byte=tx_access_list_gas_per_byte,
         authorization_tuple_gas_per_byte=authorization_tuple_gas_per_byte,
         blob_hash_gas_per_byte=blob_hash_gas_per_byte,
     )
@@ -213,6 +226,8 @@ def compute_block_resource_usage(
         calldata_gas=bandwidth["calldata_gas"],
         bal_rlp_bytes=bandwidth["bal_rlp_bytes"],
         bal_gas=bandwidth["bal_gas"],
+        tx_access_list_bytes=bandwidth["tx_access_list_bytes"],
+        tx_access_list_gas=bandwidth["tx_access_list_gas"],
         authorization_tuple_bytes=bandwidth["authorization_tuple_bytes"],
         authorization_tuple_gas=bandwidth["authorization_tuple_gas"],
         blob_versioned_hash_bytes=bandwidth["blob_versioned_hash_bytes"],
