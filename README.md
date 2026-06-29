@@ -20,7 +20,10 @@ models.
 ### Mechanism 0: Glamsterdam / EIP-8037 Baseline
 
 This is the committed passive replay baseline in
-`notebooks/0.8-glamsterdam-only-baseline.ipynb`.
+`notebooks/0.9-glamsterdam-passive-replay.ipynb`.
+
+The transaction-level regular-gas recalculation that feeds this baseline lives in
+`notebooks/0.8-glamsterdam-regular-gas-recalculation.ipynb`.
 
 State growth remains under EIP-8037. The block-level bottleneck is:
 
@@ -49,9 +52,8 @@ bandwidth:
 
 Bandwidth then gets its own EIP-7999-style target, limit, excess accumulator,
 and fake-exponential base fee. State remains under EIP-8037 for this stage.
-
-`notebooks/0.9-glamsterdam-plus-bandwidth.ipynb` is a draft workspace for this
-mechanism and should not be treated as finalized yet.
+The bandwidth gas formula here is a simulator design choice, not a claim that
+every byte already has this gas price in the scheduled Glamsterdam specs.
 
 ## Data Pipeline
 
@@ -86,6 +88,23 @@ bandwidth_gas =
   + authorization_tuple_gas
   + blob_versioned_hash_gas
 ```
+
+These gas components intentionally mix two kinds of accounting, so keep the
+labels straight:
+
+- Current EIP-7999 calldata resource gas uses the old calldata rule:
+  `4 * zero_calldata_bytes + 16 * nonzero_calldata_bytes`.
+- The 64 gas/byte number is a floor-accounting rate from EIP-7976, EIP-7981,
+  EIP-8131, and EIP-8279-style proposals. It is not automatically the unit of
+  an EIP-7999 bandwidth resource.
+- BAL bytes under EIP-7928 do not have a direct `16 gas/byte` price in
+  Glamsterdam. They are constrained indirectly by execution gas and BAL item
+  rules. The current simulator's `bal_gas = 16 * bal_rlp_bytes` is a candidate
+  bandwidth-resource convention.
+- Authorization tuples and blob versioned hashes are included in the broadened
+  bandwidth content table because they are transaction-content bytes. Their
+  `64 gas/byte` columns are EIP-8131-style floor-accounting columns, not current
+  EIP-7999 calldata-resource gas.
 
 For transaction access lists, `tx_access_list_bytes` follows EIP-7981:
 `20 * address_entries + 32 * storage_keys`, charged at `64 gas/byte`.
@@ -138,11 +157,11 @@ notebooks/
   0.7-state-growth-rpc-calibration.ipynb
     RPC calibration for accounts and delegation indicators
 
-  0.8-glamsterdam-only-baseline.ipynb
-    committed Glamsterdam/EIP-8037 passive replay
+  0.8-glamsterdam-regular-gas-recalculation.ipynb
+    transaction-level EIP-7976/EIP-7981 regular-gas recalculation
 
-  0.9-glamsterdam-plus-bandwidth.ipynb
-    draft Mechanism A workspace
+  0.9-glamsterdam-passive-replay.ipynb
+    Glamsterdam/EIP-8037 passive replay
 ```
 
 ## Repository Layout
@@ -207,7 +226,8 @@ jupyter notebook notebooks/0.3-rpc-bal-rlp.ipynb
 jupyter notebook notebooks/0.5-bandwidth-content.ipynb
 jupyter notebook notebooks/0.6-state-growth-xatu.ipynb
 jupyter notebook notebooks/0.7-state-growth-rpc-calibration.ipynb
-jupyter notebook notebooks/0.8-glamsterdam-only-baseline.ipynb
+jupyter notebook notebooks/0.8-glamsterdam-regular-gas-recalculation.ipynb
+jupyter notebook notebooks/0.9-glamsterdam-passive-replay.ipynb
 ```
 
 ## Local Configuration
@@ -221,9 +241,11 @@ markdown, or git history.
 - The CBT `gas_state_growth` field is useful as a diagnostic, but it is too
   broad to subtract from execution gas for EIP-8037 replay because it includes
   non-creation state/access activity.
-- For Glamsterdam-only replay, execution gas is estimated as historical gas
-  used minus the historical state-creation cost that EIP-8037 reprices.
-- In the 0.8 replay, over-limit historical blocks are flagged as invalid
+- For Glamsterdam-only replay, regular gas should come from the transaction-level
+  0.8 recalculation: receipt gas after historical state-creation de-accounting,
+  plus the EIP-7976 calldata floor branch and EIP-7981 access-list data
+  surcharge where they bind.
+- In the passive replay, over-limit historical blocks are flagged as invalid
   diagnostics. Their base-fee update is capped at the 60M block limit, matching
   how a valid full block would update by at most 12.5%.
 - Synthetic notebooks and older Xatu-only BAL experiments are archived as
