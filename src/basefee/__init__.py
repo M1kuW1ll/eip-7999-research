@@ -11,6 +11,8 @@ from .eip7999_normalized import (
     apply_vector_block,
     compute_base_fee,
     fake_exponential,
+    reserve_anchor_threshold_base_fee,
+    reserve_price_active,
     update_normalized_excess_gas,
 )
 
@@ -25,6 +27,8 @@ __all__ = [
     "apply_vector_block",
     "compute_base_fee",
     "fake_exponential",
+    "reserve_anchor_threshold_base_fee",
+    "reserve_price_active",
     "update_eip1559_base_fee",
     "update_normalized_excess_gas",
 ]

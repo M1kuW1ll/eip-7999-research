@@ -9,6 +9,8 @@ from basefee import (
     apply_vector_block,
     compute_base_fee,
     fake_exponential,
+    reserve_anchor_threshold_base_fee,
+    reserve_price_active,
     update_normalized_excess_gas,
 )
 
@@ -168,6 +170,41 @@ class EIP7999NormalizedBaseFeeTest(unittest.TestCase):
         self.assertEqual(result["bandwidth"].excess_gas, 0)
         self.assertEqual(set(result), {"execution_state", "bandwidth"})
 
+    def test_apply_vector_block_passes_reserve_anchor(self):
+        configs = {
+            "execution": ResourceFeeConfig(
+                name="execution",
+                gas_limit=100,
+                gas_target=50,
+            ),
+            "bandwidth": ResourceFeeConfig(
+                name="bandwidth",
+                gas_limit=100,
+                gas_target=25,
+                reserve_mode="eip7918",
+                reserve_factor=12,
+                reserve_anchor_resource="blob",
+            ),
+        }
+        parent_states = {
+            "execution": ResourceFeeState(name="execution"),
+            "bandwidth": ResourceFeeState(name="bandwidth"),
+        }
+
+        result = apply_vector_block(
+            parent_states=parent_states,
+            gas_used_by_resource={"execution": 1, "bandwidth": 20},
+            configs=configs,
+            reserve_anchor_base_fee_by_resource={"bandwidth": 25},
+        )
+
+        self.assertGreater(result["bandwidth"].excess_gas, 0)
+        self.assertEqual(
+            result["bandwidth"].base_fee,
+            compute_base_fee(result["bandwidth"].excess_gas, configs["bandwidth"]),
+        )
+        self.assertLess(result["bandwidth"].base_fee, 3)
+
     def test_vector_missing_parent_state_raises(self):
         with self.assertRaises(KeyError):
             apply_vector_block(
@@ -213,6 +250,110 @@ class EIP7999NormalizedBaseFeeTest(unittest.TestCase):
                     gas_target=10,
                 ),
             )
+
+    def test_unlimited_state_normalizes_by_target(self):
+        config = ResourceFeeConfig(
+            name="state",
+            gas_limit=None,
+            gas_target=75,
+            gas_normalization_factor=1_000,
+        )
+
+        excess = update_normalized_excess_gas(
+            parent_excess_gas=0,
+            gas_used=150,
+            config=config,
+        )
+
+        self.assertEqual(excess, 1_000)
+        self.assertEqual(config.normalization_denominator_value, 75)
+
+    def test_unlimited_state_allows_usage_above_target(self):
+        config = ResourceFeeConfig(
+            name="state",
+            gas_limit=None,
+            gas_target=75,
+        )
+
+        result = apply_resource_block(
+            parent=ResourceFeeState(name="state"),
+            gas_used=1_000,
+            config=config,
+        )
+
+        self.assertGreater(result.excess_gas, 0)
+
+    def test_reserve_anchor_threshold_ceil_divides_anchor_by_factor(self):
+        config = ResourceFeeConfig(
+            name="bandwidth",
+            gas_limit=100,
+            gas_target=25,
+            reserve_mode="eip7918",
+            reserve_factor=12,
+            reserve_anchor_resource="blob",
+        )
+
+        self.assertEqual(
+            reserve_anchor_threshold_base_fee(25, config),
+            3,
+        )
+
+    def test_reserve_path_prevents_excess_from_falling(self):
+        config = ResourceFeeConfig(
+            name="bandwidth",
+            gas_limit=100,
+            gas_target=25,
+            min_base_fee=1,
+            gas_normalization_factor=1_000,
+            update_fraction=100,
+            reserve_mode="eip7918",
+            reserve_factor=12,
+            reserve_anchor_resource="blob",
+        )
+
+        self.assertTrue(
+            reserve_price_active(
+                base_fee=1,
+                reserve_anchor_base_fee=24,
+                config=config,
+            )
+        )
+        excess = update_normalized_excess_gas(
+            parent_excess_gas=0,
+            gas_used=20,
+            config=config,
+            parent_base_fee=1,
+            reserve_anchor_base_fee=24,
+        )
+
+        # EIP-7918 reserve path:
+        # delta = gas_used * (limit - target) // limit = 20 * 75 // 100 = 15
+        # normalized_delta = 15 * 1000 // 100 = 150
+        self.assertEqual(excess, 150)
+
+    def test_reserve_path_does_not_hard_clamp_base_fee(self):
+        config = ResourceFeeConfig(
+            name="bandwidth",
+            gas_limit=60_000_000,
+            gas_target=15_000_000,
+            min_base_fee=1,
+            reserve_mode="eip7918",
+            reserve_factor=12,
+            reserve_anchor_resource="blob",
+        )
+
+        result = apply_resource_block(
+            parent=ResourceFeeState(name="bandwidth", base_fee=1),
+            gas_used=1,
+            config=config,
+            reserve_anchor_base_fee=5_000_000,
+        )
+
+        self.assertEqual(result.base_fee, compute_base_fee(result.excess_gas, config))
+        self.assertLess(
+            result.base_fee,
+            reserve_anchor_threshold_base_fee(5_000_000, config),
+        )
 
 
 if __name__ == "__main__":

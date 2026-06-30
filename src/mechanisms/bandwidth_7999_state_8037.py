@@ -6,7 +6,10 @@ through the EIP-8037-style execution/state bottleneck path.
 
 from __future__ import annotations
 
-from basefee import ResourceFeeState, update_eip1559_base_fee
+from basefee import (
+    ResourceFeeState,
+    update_eip1559_base_fee,
+)
 from basefee.eip7999_normalized import apply_resource_block
 
 from ._common import initial_states, result_for_block
@@ -43,6 +46,7 @@ def _apply_bandwidth_block(
     parent: ResourceFeeState,
     gas_used: int,
     config: MechanismConfig,
+    reserve_anchor_base_fee: int | None = None,
 ) -> ResourceFeeState:
     resource = config.resources["bandwidth"]
     if parent.name != resource.name:
@@ -53,6 +57,7 @@ def _apply_bandwidth_block(
         parent=parent,
         gas_used=gas_used_for_base_fee,
         config=resource,
+        reserve_anchor_base_fee=reserve_anchor_base_fee,
     )
 
 
@@ -79,6 +84,13 @@ def replay_bandwidth_7999_state_8037(
     if set(config.resources) != {"execution_state", "bandwidth"}:
         raise ValueError(
             "bandwidth_7999_state_8037 requires execution_state and bandwidth"
+        )
+    if (
+        config.resources["bandwidth"].has_reserve_price
+        and any(block.blob_base_fee_per_gas is None for block in blocks)
+    ):
+        raise ValueError(
+            "blob_base_fee_per_gas is required for bandwidth reserve pricing"
         )
 
     states = initial_states(config)
@@ -116,6 +128,7 @@ def replay_bandwidth_7999_state_8037(
                 parent=states["bandwidth"],
                 gas_used=block.bandwidth_gas,
                 config=config,
+                reserve_anchor_base_fee=block.blob_base_fee_per_gas,
             ),
         }
 

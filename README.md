@@ -39,7 +39,7 @@ separate limit or base fee.
 
 ### Mechanism A: Glamsterdam + Separate Bandwidth
 
-This is the next mechanism under active development. The goal is:
+This replay lives in `notebooks/0.8-glamsterdam-plus-bandwidth.ipynb`.
 
 ```text
 execution/state:
@@ -53,7 +53,55 @@ bandwidth:
 Bandwidth then gets its own EIP-7999-style target, limit, excess accumulator,
 and fake-exponential base fee. State remains under EIP-8037 for this stage. The
 byte-to-resource-gas mapping is a replay-configuration choice, not part of the
-0.3 bandwidth content table.
+0.3 bandwidth content table. The bandwidth base fee uses the same blob-anchored
+reserve path as the full EIP-7999 replay. The reserve condition compares the
+bandwidth base fee to `blob_base_fee_per_gas / 12`, but it affects excess
+growth rather than hard-clamping the base fee.
+
+### Full EIP-7999: Execution + Bandwidth + State
+
+This replay lives in `notebooks/0.9-full-7999-passive-replay.ipynb`.
+
+The full EIP-7999 notebook separates all three fee dimensions:
+
+```text
+execution:
+  execution_gas_used
+
+bandwidth:
+  16 * (
+    calldata bytes
+    + BAL bytes
+    + tx access-list bytes
+    + authorization tuple bytes
+    + blob versioned hash bytes
+  )
+
+state:
+  state_gas_8037
+```
+
+Execution and bandwidth have hard per-block limits. State has a target but no
+hard per-block limit in the draft being modeled here, so its normalized excess
+uses the state target as the denominator.
+
+All three dimensions use the normalized EIP-7999 fake-exponential update. The
+notebook keeps the integer base-fee columns seeded at `min_base_fee = 1` and
+also reports fee multipliers so short-window pressure is visible even when the
+integer base fee remains at the minimum.
+
+Bandwidth also uses the EIP-7999 reserve-price anchor against the historical
+blob base fee. With `reserve_factor = 12`, the reserve condition is active when:
+
+```text
+bandwidth_base_fee * 12 < blob_base_fee_per_gas
+```
+
+The reserve path changes the bandwidth excess-gas update; it is not a hard
+`max(base_fee, blob / 12)` clamp. The full-7999 notebook therefore joins
+historical `blob_base_fee_per_gas` from the blob-fee sample before replaying
+bandwidth, and reports `ceil(blob_base_fee_per_gas / 12)` only as a diagnostic
+anchor threshold.
 
 ## Data Pipeline
 
@@ -159,6 +207,12 @@ notebooks/
 
   0.8-glamsterdam-plus-bandwidth.ipynb
     Mechanism A: EIP-8037 plus separated bandwidth
+
+  0.9-full-7999-passive-replay.ipynb
+    full EIP-7999: execution, bandwidth, and state as separated resources
+
+  1.0-blob-base-fee-calldata-correlation.ipynb
+    blob base fee vs calldata bytes/gas correlation check
 ```
 
 Older smoke-test notebooks for Xatu credentials and standalone calldata gas
@@ -229,6 +283,8 @@ jupyter notebook notebooks/0.5-state-growth-rpc-calibration.ipynb
 jupyter notebook notebooks/0.6-glamsterdam-regular-gas-recalculation.ipynb
 jupyter notebook notebooks/0.7-glamsterdam-passive-replay.ipynb
 jupyter notebook notebooks/0.8-glamsterdam-plus-bandwidth.ipynb
+jupyter notebook notebooks/0.9-full-7999-passive-replay.ipynb
+jupyter notebook notebooks/1.0-blob-base-fee-calldata-correlation.ipynb
 ```
 
 ## Local Configuration
@@ -249,6 +305,12 @@ markdown, or git history.
 - In the passive replay, over-limit historical blocks are flagged as invalid
   diagnostics. Their base-fee update is capped at the 60M block limit, matching
   how a valid full block would update by at most 12.5%.
+- In full EIP-7999 replay, execution and bandwidth over-limit blocks are flagged
+  as invalid diagnostics. State usage above its 75M target is valid and updates
+  the state excess without a per-block cap.
+- In full EIP-7999 replay, bandwidth uses the blob-base-fee reserve path. The
+  diagnostic threshold is `ceil(blob_base_fee_per_gas / 12)`, but the charged
+  base fee remains the pure `fake_exponential(excess)` value.
 - Synthetic notebooks and older Xatu-only BAL experiments are archived as
   context. The current realized-block pipeline uses Xatu for calldata and RPC
   for BAL/state calibration where Xatu lacks the necessary trace detail.

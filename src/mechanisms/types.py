@@ -2,8 +2,8 @@
 
 The mechanism layer is passive replay only: historical resource usage is fixed,
 and invalid blocks mean the hypothetical mechanism would not have accepted the
-historical block as-is. Elastic demand, reserve prices, and builder packing are
-intentionally out of scope.
+historical block as-is. Elastic demand and builder packing are intentionally out
+of scope.
 """
 
 from __future__ import annotations
@@ -31,6 +31,7 @@ class PassiveBlockUsage:
     bal_gas: int = 0
     calldata_bytes: int = 0
     bal_bytes: int = 0
+    blob_base_fee_per_gas: int | None = None
 
     def __post_init__(self) -> None:
         values = [
@@ -45,6 +46,11 @@ class PassiveBlockUsage:
         ]
         if any(value < 0 for value in values):
             raise ValueError("passive block usage values must be non-negative")
+        if (
+            self.blob_base_fee_per_gas is not None
+            and self.blob_base_fee_per_gas < 0
+        ):
+            raise ValueError("blob_base_fee_per_gas must be non-negative")
 
 
 @dataclass(frozen=True)
@@ -55,11 +61,11 @@ class MechanismBlockResult:
     valid: bool
     invalid_reasons: tuple[str, ...]
     gas_used_by_resource: Mapping[str, int]
-    gas_limit_by_resource: Mapping[str, int]
+    gas_limit_by_resource: Mapping[str, int | None]
     gas_target_by_resource: Mapping[str, int]
     base_fee_by_resource: Mapping[str, int]
     excess_gas_by_resource: Mapping[str, int]
-    pct_limit_by_resource: Mapping[str, float]
+    pct_limit_by_resource: Mapping[str, float | None]
     pct_target_by_resource: Mapping[str, float]
     execution_gas_used: int
     state_gas_used: int

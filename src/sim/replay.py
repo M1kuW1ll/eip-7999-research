@@ -28,7 +28,13 @@ def _records(blocks: pd.DataFrame | Iterable[Any]) -> list[dict[str, Any]]:
     return records
 
 
-def _reserve_floor(block: dict[str, Any], config: SimulatorConfig) -> int:
+def _hard_floor_base_fee(block: dict[str, Any], config: SimulatorConfig) -> int:
+    """Return a synthetic hard-floor base fee for explicit toy scenarios.
+
+    This is not the EIP-7999/EIP-7918 reserve path. The current mechanism
+    modules implement that reserve through excess-gas updates.
+    """
+
     bandwidth = config.bandwidth
     mode = bandwidth.reserve_mode.lower()
 
@@ -72,9 +78,14 @@ def replay(blocks: pd.DataFrame | Iterable[Any], config: SimulatorConfig) -> pd.
             bandwidth_excess,
             config.bandwidth.fake_exponential_denominator,
         )
-        bandwidth_reserve_floor = _reserve_floor(block, config)
-        bandwidth_base_fee = max(raw_bandwidth_base_fee, bandwidth_reserve_floor)
-        reserve_activated = bandwidth_reserve_floor > raw_bandwidth_base_fee
+        bandwidth_hard_floor_base_fee = _hard_floor_base_fee(block, config)
+        bandwidth_base_fee = max(
+            raw_bandwidth_base_fee,
+            bandwidth_hard_floor_base_fee,
+        )
+        hard_floor_activated = (
+            bandwidth_hard_floor_base_fee > raw_bandwidth_base_fee
+        )
 
         bandwidth_limit_hit = bandwidth_used >= config.bandwidth.limit_bytes
         execution_state_limit_hit = (
@@ -100,9 +111,9 @@ def replay(blocks: pd.DataFrame | Iterable[Any], config: SimulatorConfig) -> pd.
                 "bandwidth_excess": bandwidth_excess,
                 "shared_base_fee": shared_base_fee,
                 "bandwidth_base_fee_raw": raw_bandwidth_base_fee,
-                "bandwidth_reserve_floor": bandwidth_reserve_floor,
+                "bandwidth_hard_floor_base_fee": bandwidth_hard_floor_base_fee,
                 "bandwidth_base_fee": bandwidth_base_fee,
-                "reserve_activated": reserve_activated,
+                "hard_floor_activated": hard_floor_activated,
                 "bandwidth_limit_hit": bandwidth_limit_hit,
                 "execution_state_limit_hit": execution_state_limit_hit,
                 "bandwidth_usage_ratio": bandwidth_used

@@ -46,8 +46,12 @@ def compute_metrics(df: pd.DataFrame, config: SimulatorConfig) -> pd.DataFrame:
         "max_bandwidth_usage_over_limit": float(
             df["bandwidth_used"].max() / config.bandwidth.limit_bytes
         ),
-        "reserve_activation_frequency": float(df["reserve_activated"].mean()),
-        "reserve_activation_run_length": _max_run_length(df["reserve_activated"]),
+        "hard_floor_activation_frequency": float(
+            df["hard_floor_activated"].mean()
+        ),
+        "hard_floor_activation_run_length": _max_run_length(
+            df["hard_floor_activated"]
+        ),
         "correlation_calldata_bal": float(
             df["calldata_bytes"].corr(df["bal_bytes"])
         ),

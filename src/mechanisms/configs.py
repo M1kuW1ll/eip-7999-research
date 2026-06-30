@@ -83,6 +83,7 @@ def make_mechanism_A_config(
     initial_execution_state_base_fee: int = 1,
     initial_bandwidth_base_fee: int = 1,
     min_base_fee: int = 1,
+    bandwidth_reserve_factor: int = 12,
 ) -> MechanismConfig:
     """Mechanism A: EIP-8037 bottleneck plus EIP-7999 bandwidth.
 
@@ -91,6 +92,9 @@ def make_mechanism_A_config(
       - ``bandwidth`` with gas used from calldata + BAL + tx payload bytes
 
     State does not have a separate target or base fee in this mechanism.
+    Bandwidth/data uses the EIP-7999 blob-base-fee reserve path when
+    ``bandwidth_reserve_factor`` is positive. The reserve affects normalized
+    excess growth; it is not a hard base-fee clamp.
     """
 
     execution_state = ResourceFeeConfig(
@@ -110,6 +114,9 @@ def make_mechanism_A_config(
             bandwidth_target_ratio,
         ),
         min_base_fee=int(min_base_fee),
+        reserve_mode="eip7918" if bandwidth_reserve_factor > 0 else "none",
+        reserve_factor=int(bandwidth_reserve_factor),
+        reserve_anchor_resource="blob",
     )
     return MechanismConfig(
         name="bandwidth_7999_state_8037",
@@ -120,5 +127,77 @@ def make_mechanism_A_config(
         initial_base_fee_by_resource={
             "execution_state": int(initial_execution_state_base_fee),
             "bandwidth": int(initial_bandwidth_base_fee),
+        },
+    )
+
+
+def make_full_7999_config(
+    *,
+    execution_gas_limit: int,
+    bandwidth_gas_limit: int,
+    state_gas_target: int,
+    execution_target_ratio: int = 2,
+    bandwidth_target_ratio: int = 4,
+    initial_execution_base_fee: int = 1,
+    initial_bandwidth_base_fee: int = 1,
+    initial_state_base_fee: int = 1,
+    min_base_fee: int = 1,
+    bandwidth_reserve_factor: int = 12,
+) -> MechanismConfig:
+    """Full EIP-7999-style replay with execution, bandwidth, and state.
+
+    Fee resources:
+      - ``execution`` with a target and hard block limit
+      - ``bandwidth`` with a target and hard block limit
+      - ``state`` with a target but no hard block limit
+
+    State follows the EIP-7999 draft rule that an unlimited resource normalizes
+    excess deltas by its target.
+
+    Bandwidth/data follows the EIP-7999 generalized EIP-7918 reserve rule,
+    anchored to the blob base fee. With ``bandwidth_reserve_factor=12``, the
+    reserve condition compares the data base fee to ``blob_base_fee / 12``.
+    The reserve path changes excess growth; it is not a hard base-fee clamp.
+    """
+
+    execution = ResourceFeeConfig(
+        name="execution",
+        gas_limit=int(execution_gas_limit),
+        gas_target=_target_from_ratio(
+            execution_gas_limit,
+            execution_target_ratio,
+        ),
+        min_base_fee=int(min_base_fee),
+    )
+    bandwidth = ResourceFeeConfig(
+        name="bandwidth",
+        gas_limit=int(bandwidth_gas_limit),
+        gas_target=_target_from_ratio(
+            bandwidth_gas_limit,
+            bandwidth_target_ratio,
+        ),
+        min_base_fee=int(min_base_fee),
+        reserve_mode="eip7918" if bandwidth_reserve_factor > 0 else "none",
+        reserve_factor=int(bandwidth_reserve_factor),
+        reserve_anchor_resource="blob",
+    )
+    state = ResourceFeeConfig(
+        name="state",
+        gas_limit=None,
+        gas_target=int(state_gas_target),
+        normalization_denominator=int(state_gas_target),
+        min_base_fee=int(min_base_fee),
+    )
+    return MechanismConfig(
+        name="full_7999",
+        resources={
+            "execution": execution,
+            "bandwidth": bandwidth,
+            "state": state,
+        },
+        initial_base_fee_by_resource={
+            "execution": int(initial_execution_base_fee),
+            "bandwidth": int(initial_bandwidth_base_fee),
+            "state": int(initial_state_base_fee),
         },
     )

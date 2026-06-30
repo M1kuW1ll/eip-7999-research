@@ -67,7 +67,7 @@ class ReplayTest(unittest.TestCase):
         self.assertEqual(int(df.loc[0, "execution_state_used"]), 20)
         self.assertEqual(int(df.loc[0, "bandwidth_used"]), 150)
 
-    def test_fixed_reserve_floor_can_activate(self):
+    def test_fixed_hard_floor_can_activate(self):
         config = SimulatorConfig(
             bandwidth=BandwidthConfig(
                 target_bytes=100,
@@ -95,7 +95,7 @@ class ReplayTest(unittest.TestCase):
         df = replay(blocks, config)
 
         self.assertEqual(int(df.loc[0, "bandwidth_base_fee"]), 5)
-        self.assertTrue(bool(df.loc[0, "reserve_activated"]))
+        self.assertTrue(bool(df.loc[0, "hard_floor_activated"]))
 
     def test_calldata_only_path_changes_bandwidth_usage(self):
         config = SimulatorConfig()

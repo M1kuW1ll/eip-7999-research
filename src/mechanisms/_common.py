@@ -42,7 +42,11 @@ def result_for_block(
         name: states[name].excess_gas for name in config.resources
     }
     pct_limit_by_resource = {
-        name: gas_used_by_resource[name] / gas_limit_by_resource[name]
+        name: (
+            None
+            if gas_limit_by_resource[name] is None
+            else gas_used_by_resource[name] / gas_limit_by_resource[name]
+        )
         for name in gas_used_by_resource
     }
     pct_target_by_resource = {

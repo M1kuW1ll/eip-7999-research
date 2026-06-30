@@ -21,6 +21,7 @@ def block(
     state_gas_used: int = 0,
     bandwidth_gas: int = 0,
     bandwidth_bytes: int = 0,
+    blob_base_fee_per_gas: int | None = 12,
 ) -> PassiveBlockUsage:
     return PassiveBlockUsage(
         block_number=block_number,
@@ -29,6 +30,7 @@ def block(
         state_gas_used=state_gas_used,
         bandwidth_gas=bandwidth_gas,
         bandwidth_bytes=bandwidth_bytes,
+        blob_base_fee_per_gas=blob_base_fee_per_gas,
     )
 
 
@@ -174,6 +176,60 @@ class MechanismATest(unittest.TestCase):
             expected_bandwidth_base_fee,
         )
         self.assertEqual(results[1].excess_gas_by_resource["execution_state"], 0)
+
+    def test_bandwidth_reserve_requires_blob_base_fee(self):
+        config = make_mechanism_A_config(
+            execution_state_gas_limit=100_000_000,
+            bandwidth_gas_limit=40_000_000,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "blob_base_fee_per_gas is required",
+        ):
+            replay_bandwidth_7999_state_8037(
+                [
+                    block(
+                        execution_gas_used=1,
+                        state_gas_used=1,
+                        bandwidth_gas=1,
+                        blob_base_fee_per_gas=None,
+                    )
+                ],
+                config,
+            )
+
+    def test_bandwidth_reserve_path_does_not_hard_clamp_base_fee(self):
+        config = make_mechanism_A_config(
+            execution_state_gas_limit=100_000_000,
+            bandwidth_gas_limit=40_000_000,
+            initial_bandwidth_base_fee=1,
+        )
+
+        results = replay_bandwidth_7999_state_8037(
+            [
+                block(
+                    block_number=1,
+                    execution_gas_used=1,
+                    state_gas_used=1,
+                    bandwidth_gas=20_000_000,
+                    bandwidth_bytes=1,
+                    blob_base_fee_per_gas=25,
+                ),
+                block(
+                    block_number=2,
+                    execution_gas_used=1,
+                    state_gas_used=1,
+                    bandwidth_gas=1,
+                    bandwidth_bytes=1,
+                    blob_base_fee_per_gas=25,
+                ),
+            ],
+            config,
+        )
+
+        self.assertGreater(results[1].excess_gas_by_resource["bandwidth"], 0)
+        self.assertLess(results[1].base_fee_by_resource["bandwidth"], 3)
 
 
 if __name__ == "__main__":
