@@ -575,10 +575,10 @@ def summarize_accounts(
     block_number: int,
     accounts: list[list[Any]],
     rlp_bytes: bytes,
-    calldata_bytes: int,
+    calldata_bytes: int = 0,
     include_reads: bool,
     include_system_changes: bool,
-    calldata_source: str = "xatu",
+    calldata_source: str = "not_used",
 ) -> RpcBalSummary:
     storage_writes_rlp_bytes = 0
     storage_reads_rlp_bytes = 0
@@ -654,9 +654,10 @@ def build_rpc_bal_from_traces(
     full_trace: list[dict[str, Any]] | None,
     block_info: dict[str, Any],
     receipts: list[dict[str, Any]],
-    calldata_bytes: int,
+    calldata_bytes: int = 0,
     rpc_url: str | None = None,
     rpc_headers: dict[str, str] | None = None,
+    calldata_source: str = "not_used",
     include_reads: bool = True,
     include_system_changes: bool = False,
 ) -> RpcBalResult:
@@ -712,6 +713,7 @@ def build_rpc_bal_from_traces(
         accounts=accounts,
         rlp_bytes=encoded,
         calldata_bytes=int(calldata_bytes),
+        calldata_source=calldata_source,
         include_reads=include_reads,
         include_system_changes=include_system_changes,
     )
@@ -729,7 +731,8 @@ def build_rpc_bal_for_block(
     rpc_url: str,
     block_number: int,
     *,
-    calldata_bytes: int,
+    calldata_bytes: int = 0,
+    calldata_source: str = "not_used",
     rpc_headers: dict[str, str] | None = None,
     include_reads: bool = True,
     include_system_changes: bool = False,
@@ -771,6 +774,7 @@ def build_rpc_bal_for_block(
         block_info=block_info,
         receipts=receipts,
         calldata_bytes=calldata_bytes,
+        calldata_source=calldata_source,
         rpc_url=rpc_url,
         rpc_headers=rpc_headers,
         include_reads=include_reads,

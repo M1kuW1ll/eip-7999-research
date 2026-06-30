@@ -54,8 +54,8 @@ but RPC is the safer source for BAL bytes.
 The primary notebooks are:
 
 ```text
-notebooks/0.2-calldata-xatu.ipynb
-notebooks/0.3-rpc-bal-rlp.ipynb
+notebooks/0.1-rpc-bal-rlp.ipynb
+notebooks/0.3-bandwidth-content.ipynb
 ```
 
 The underlying module is:

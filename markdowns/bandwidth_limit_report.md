@@ -52,7 +52,7 @@ src/bandwidth_limits/
   eip7999_metering.py
   sweep.py
 
-notebooks/0.4-bandwidth-limit-scenarios.ipynb
+notebooks/0.2-bandwidth-limit-scenarios.ipynb
 tests/test_bandwidth_limits.py
 ```
 

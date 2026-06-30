@@ -1,4 +1,14 @@
-"""Map byte-denominated bandwidth caps into EIP-7999 resource gas units."""
+"""Map byte-denominated bandwidth caps into candidate resource gas units.
+
+The defaults here are project assumptions for the broadened bandwidth experiment.
+They should not be read as scheduled Glamsterdam gas prices. In particular:
+
+* EIP-7999 calldata resource gas uses the old calldata 4/16 rule.
+* The 64 gas/byte values are floor-accounting rates from EIP-7981/EIP-8131-like
+  transaction-content rules, not automatically the unit of an EIP-7999 resource.
+* BAL bytes do not have a direct EIP-7928 gas-per-byte price; ``16`` is the
+  current simulator convention for candidate bandwidth-resource gas.
+"""
 
 from __future__ import annotations
 

@@ -20,10 +20,10 @@ models.
 ### Mechanism 0: Glamsterdam / EIP-8037 Baseline
 
 This is the committed passive replay baseline in
-`notebooks/0.9-glamsterdam-passive-replay.ipynb`.
+`notebooks/0.7-glamsterdam-passive-replay.ipynb`.
 
 The transaction-level regular-gas recalculation that feeds this baseline lives in
-`notebooks/0.8-glamsterdam-regular-gas-recalculation.ipynb`.
+`notebooks/0.6-glamsterdam-regular-gas-recalculation.ipynb`.
 
 State growth remains under EIP-8037. The block-level bottleneck is:
 
@@ -46,14 +46,14 @@ execution/state:
   execution_state_used = max(execution_gas_used, state_gas_used)
 
 bandwidth:
-  bandwidth_gas = calldata_gas + BAL_gas + tx_access_list_gas
-                  + authorization_tuple_gas + blob_versioned_hash_gas
+  bandwidth_bytes = calldata bytes + BAL bytes + tx access-list bytes
+                    + authorization tuple bytes + blob versioned hash bytes
 ```
 
 Bandwidth then gets its own EIP-7999-style target, limit, excess accumulator,
-and fake-exponential base fee. State remains under EIP-8037 for this stage.
-The bandwidth gas formula here is a simulator design choice, not a claim that
-every byte already has this gas price in the scheduled Glamsterdam specs.
+and fake-exponential base fee. State remains under EIP-8037 for this stage. The
+byte-to-resource-gas mapping is a replay-configuration choice, not part of the
+0.3 bandwidth content table.
 
 ## Data Pipeline
 
@@ -71,7 +71,7 @@ Bandwidth content is built from Xatu plus RPC:
 - Xatu transaction fields supply blob versioned hash counts.
 
 The main bandwidth output is produced by
-`notebooks/0.5-bandwidth-content.ipynb`:
+`notebooks/0.3-bandwidth-content.ipynb`:
 
 ```text
 bandwidth_payload_bytes =
@@ -81,16 +81,17 @@ bandwidth_payload_bytes =
   + authorization_tuple_rlp_bytes
   + blob_versioned_hash_bytes
 
-bandwidth_gas =
-  calldata_gas
-  + bal_gas
-  + tx_access_list_gas
-  + authorization_tuple_gas
-  + blob_versioned_hash_gas
+bandwidth_metered_bytes =
+  calldata_bytes
+  + bal_rlp_bytes
+  + tx_access_list_bytes
+  + authorization_tuple_8131_bytes
+  + blob_versioned_hash_bytes
 ```
 
-These gas components intentionally mix two kinds of accounting, so keep the
-labels straight:
+The 0.3 notebook deliberately keeps this as byte accounting only. Later replay
+mechanisms can decide how to map these bytes into resource gas. Keep the labels
+straight:
 
 - Current EIP-7999 calldata resource gas uses the old calldata rule:
   `4 * zero_calldata_bytes + 16 * nonzero_calldata_bytes`.
@@ -99,25 +100,24 @@ labels straight:
   an EIP-7999 bandwidth resource.
 - BAL bytes under EIP-7928 do not have a direct `16 gas/byte` price in
   Glamsterdam. They are constrained indirectly by execution gas and BAL item
-  rules. The current simulator's `bal_gas = 16 * bal_rlp_bytes` is a candidate
-  bandwidth-resource convention.
+  rules. If a later replay maps BAL bytes to `16 gas/byte`, that is a candidate
+  bandwidth-resource convention rather than a 0.3 content-table output.
 - Authorization tuples and blob versioned hashes are included in the broadened
-  bandwidth content table because they are transaction-content bytes. Their
-  `64 gas/byte` columns are EIP-8131-style floor-accounting columns, not current
-  EIP-7999 calldata-resource gas.
+  bandwidth content table because they are transaction-content bytes. The
+  notebook keeps byte counts only, not EIP-8131-style gas columns.
 
 For transaction access lists, `tx_access_list_bytes` follows EIP-7981:
-`20 * address_entries + 32 * storage_keys`, charged at `64 gas/byte`.
+`20 * address_entries + 32 * storage_keys`.
 For authorization tuples, the notebook keeps both actual RLP bytes and the
-EIP-8131 fixed-size/floor-accounting byte count.
+EIP-8131 fixed-size byte count.
 
 ### State-Growth Inputs
 
 State-growth inputs are built in two steps:
 
-- `notebooks/0.6-state-growth-xatu.ipynb` pulls scalable Xatu/CBT estimates for
+- `notebooks/0.4-state-growth-xatu.ipynb` pulls scalable Xatu/CBT estimates for
   storage-slot creation, account creation, and code bytes.
-- `notebooks/0.7-state-growth-rpc-calibration.ipynb` calibrates the Xatu
+- `notebooks/0.5-state-growth-rpc-calibration.ipynb` calibrates the Xatu
   estimator against RPC/prestate traces and adds EIP-7702 delegation indicators.
 
 The replay input is:
@@ -136,33 +136,33 @@ For the current EIP-8037 profile, `CPSB = 1530`.
 
 ```text
 notebooks/
-  0.1-data-pull.ipynb
-    credential and Xatu smoke test
-
-  0.2-calldata-xatu.ipynb
-    calldata bytes and calldata gas from Xatu
-
-  0.3-rpc-bal-rlp.ipynb
+  0.1-rpc-bal-rlp.ipynb
     BAL RLP bytes from RPC/prestate traces
 
-  0.4-bandwidth-limit-scenarios.ipynb
+  0.2-bandwidth-limit-scenarios.ipynb
     propagation caps and Glamsterdam worst-case bandwidth limits
 
-  0.5-bandwidth-content.ipynb
+  0.3-bandwidth-content.ipynb
     calldata + BAL + access-list + authorization-list + blob-hash bandwidth table
 
-  0.6-state-growth-xatu.ipynb
+  0.4-state-growth-xatu.ipynb
     scalable Xatu state-growth estimator
 
-  0.7-state-growth-rpc-calibration.ipynb
+  0.5-state-growth-rpc-calibration.ipynb
     RPC calibration for accounts and delegation indicators
 
-  0.8-glamsterdam-regular-gas-recalculation.ipynb
+  0.6-glamsterdam-regular-gas-recalculation.ipynb
     transaction-level EIP-7976/EIP-7981 regular-gas recalculation
 
-  0.9-glamsterdam-passive-replay.ipynb
+  0.7-glamsterdam-passive-replay.ipynb
     Glamsterdam/EIP-8037 passive replay
+
+  0.8-glamsterdam-plus-bandwidth.ipynb
+    Mechanism A: EIP-8037 plus separated bandwidth
 ```
+
+Older smoke-test notebooks for Xatu credentials and standalone calldata gas
+validation are in `archived/`.
 
 ## Repository Layout
 
@@ -221,13 +221,14 @@ PYTHONPATH=src python -m pytest \
 Open notebooks in order when rebuilding the 500-block sample:
 
 ```bash
-jupyter notebook notebooks/0.2-calldata-xatu.ipynb
-jupyter notebook notebooks/0.3-rpc-bal-rlp.ipynb
-jupyter notebook notebooks/0.5-bandwidth-content.ipynb
-jupyter notebook notebooks/0.6-state-growth-xatu.ipynb
-jupyter notebook notebooks/0.7-state-growth-rpc-calibration.ipynb
-jupyter notebook notebooks/0.8-glamsterdam-regular-gas-recalculation.ipynb
-jupyter notebook notebooks/0.9-glamsterdam-passive-replay.ipynb
+jupyter notebook notebooks/0.1-rpc-bal-rlp.ipynb
+jupyter notebook notebooks/0.2-bandwidth-limit-scenarios.ipynb
+jupyter notebook notebooks/0.3-bandwidth-content.ipynb
+jupyter notebook notebooks/0.4-state-growth-xatu.ipynb
+jupyter notebook notebooks/0.5-state-growth-rpc-calibration.ipynb
+jupyter notebook notebooks/0.6-glamsterdam-regular-gas-recalculation.ipynb
+jupyter notebook notebooks/0.7-glamsterdam-passive-replay.ipynb
+jupyter notebook notebooks/0.8-glamsterdam-plus-bandwidth.ipynb
 ```
 
 ## Local Configuration
@@ -242,7 +243,7 @@ markdown, or git history.
   broad to subtract from execution gas for EIP-8037 replay because it includes
   non-creation state/access activity.
 - For Glamsterdam-only replay, regular gas should come from the transaction-level
-  0.8 recalculation: receipt gas after historical state-creation de-accounting,
+  0.6 recalculation: receipt gas after historical state-creation de-accounting,
   plus the EIP-7976 calldata floor branch and EIP-7981 access-list data
   surcharge where they bind.
 - In the passive replay, over-limit historical blocks are flagged as invalid

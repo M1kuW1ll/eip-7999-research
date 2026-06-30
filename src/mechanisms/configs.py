@@ -72,3 +72,53 @@ def make_glamsterdam_only_config(
         resources={"execution_state": execution_state},
         initial_base_fee_by_resource={"execution_state": int(initial_base_fee)},
     )
+
+
+def make_mechanism_A_config(
+    *,
+    execution_state_gas_limit: int,
+    bandwidth_gas_limit: int,
+    execution_state_target_ratio: int = 2,
+    bandwidth_target_ratio: int = 4,
+    initial_execution_state_base_fee: int = 1,
+    initial_bandwidth_base_fee: int = 1,
+    min_base_fee: int = 1,
+) -> MechanismConfig:
+    """Mechanism A: EIP-8037 bottleneck plus EIP-7999 bandwidth.
+
+    Fee resources:
+      - ``execution_state`` with gas used ``max(execution_gas, state_gas)``
+      - ``bandwidth`` with gas used from calldata + BAL + tx payload bytes
+
+    State does not have a separate target or base fee in this mechanism.
+    """
+
+    execution_state = ResourceFeeConfig(
+        name="execution_state",
+        gas_limit=int(execution_state_gas_limit),
+        gas_target=_target_from_ratio(
+            execution_state_gas_limit,
+            execution_state_target_ratio,
+        ),
+        min_base_fee=int(min_base_fee),
+    )
+    bandwidth = ResourceFeeConfig(
+        name="bandwidth",
+        gas_limit=int(bandwidth_gas_limit),
+        gas_target=_target_from_ratio(
+            bandwidth_gas_limit,
+            bandwidth_target_ratio,
+        ),
+        min_base_fee=int(min_base_fee),
+    )
+    return MechanismConfig(
+        name="bandwidth_7999_state_8037",
+        resources={
+            "execution_state": execution_state,
+            "bandwidth": bandwidth,
+        },
+        initial_base_fee_by_resource={
+            "execution_state": int(initial_execution_state_base_fee),
+            "bandwidth": int(initial_bandwidth_base_fee),
+        },
+    )
