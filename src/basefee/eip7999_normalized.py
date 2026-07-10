@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import log
 
 GAS_NORMALIZATION_FACTOR = 10**9
 BASE_FEE_UPDATE_FRACTION = 4_245_093_508
@@ -218,6 +219,37 @@ def compute_base_fee(
         int(excess_gas),
         config.update_fraction,
     )
+
+
+def excess_gas_for_base_fee(
+    base_fee: int,
+    config: ResourceFeeConfig,
+) -> int:
+    """Return the smallest excess gas whose fake-exponential fee reaches base_fee.
+
+    EIP-7999 derives base fees from excess gas. For passive replay warm starts,
+    this lets us seed a new resource dimension near an observed historical base
+    fee instead of starting all separated dimensions from minimum fee.
+    """
+
+    if base_fee < config.min_base_fee:
+        raise ValueError("base_fee must be >= min_base_fee")
+    if base_fee <= config.min_base_fee:
+        return 0
+
+    ratio = int(base_fee) / int(config.min_base_fee)
+    high = max(1, int(config.update_fraction * log(ratio)) + 1)
+    while compute_base_fee(high, config) < base_fee:
+        high *= 2
+
+    low = 0
+    while low < high:
+        mid = (low + high) // 2
+        if compute_base_fee(mid, config) < base_fee:
+            low = mid + 1
+        else:
+            high = mid
+    return low
 
 
 def apply_resource_block(

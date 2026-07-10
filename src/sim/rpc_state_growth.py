@@ -26,9 +26,17 @@ class RpcStateGrowthSummary:
     successful_tx_count: int
     reverted_tx_count: int
     new_storage_slots: int
+    storage_slot_state_bytes: int
+    storage_slot_state_gas: int
     new_accounts: int
+    new_account_state_bytes: int
+    new_account_state_gas: int
     code_bytes: int
+    code_deposit_state_bytes: int
+    code_deposit_state_gas: int
     new_delegation_indicators: int
+    delegation_indicator_state_bytes: int
+    delegation_indicator_state_gas: int
     state_bytes_equivalent: int
     state_gas_used: int
 
@@ -39,9 +47,19 @@ class RpcStateGrowthSummary:
             "successful_tx_count": self.successful_tx_count,
             "reverted_tx_count": self.reverted_tx_count,
             "rpc_new_storage_slots": self.new_storage_slots,
+            "rpc_storage_slot_state_bytes": self.storage_slot_state_bytes,
+            "rpc_storage_slot_state_gas": self.storage_slot_state_gas,
             "rpc_new_accounts": self.new_accounts,
+            "rpc_new_account_state_bytes": self.new_account_state_bytes,
+            "rpc_new_account_state_gas": self.new_account_state_gas,
             "rpc_code_bytes": self.code_bytes,
+            "rpc_code_deposit_state_bytes": self.code_deposit_state_bytes,
+            "rpc_code_deposit_state_gas": self.code_deposit_state_gas,
             "rpc_new_delegation_indicators": self.new_delegation_indicators,
+            "rpc_delegation_indicator_state_bytes": (
+                self.delegation_indicator_state_bytes
+            ),
+            "rpc_delegation_indicator_state_gas": self.delegation_indicator_state_gas,
             "rpc_state_bytes_equivalent": self.state_bytes_equivalent,
             "rpc_state_gas_used": self.state_gas_used,
         }
@@ -137,11 +155,31 @@ def summarize_rpc_state_growth_from_traces(
                 ):
                     new_storage_slots += 1
 
+    storage_slot_state_bytes = new_storage_slots * STATE_BYTES_PER_STORAGE_SET
+    new_account_state_bytes = new_accounts * STATE_BYTES_PER_NEW_ACCOUNT
+    code_deposit_state_bytes = code_bytes
+    delegation_indicator_state_bytes = (
+        new_delegation_indicators * STATE_BYTES_PER_DELEGATION_INDICATOR
+    )
+
+    storage_slot_state_gas = storage_slot_state_bytes * int(cpsb)
+    new_account_state_gas = new_account_state_bytes * int(cpsb)
+    code_deposit_state_gas = code_deposit_state_bytes * int(cpsb)
+    delegation_indicator_state_gas = (
+        delegation_indicator_state_bytes * int(cpsb)
+    )
+
     state_bytes_equivalent = (
-        new_storage_slots * STATE_BYTES_PER_STORAGE_SET
-        + new_accounts * STATE_BYTES_PER_NEW_ACCOUNT
-        + code_bytes
-        + new_delegation_indicators * STATE_BYTES_PER_DELEGATION_INDICATOR
+        storage_slot_state_bytes
+        + new_account_state_bytes
+        + code_deposit_state_bytes
+        + delegation_indicator_state_bytes
+    )
+    state_gas_used = (
+        storage_slot_state_gas
+        + new_account_state_gas
+        + code_deposit_state_gas
+        + delegation_indicator_state_gas
     )
     return RpcStateGrowthSummary(
         block_number=int(block_number),
@@ -149,11 +187,19 @@ def summarize_rpc_state_growth_from_traces(
         successful_tx_count=len(diff_trace) - len(reverted_tx_indices),
         reverted_tx_count=len(reverted_tx_indices),
         new_storage_slots=new_storage_slots,
+        storage_slot_state_bytes=storage_slot_state_bytes,
+        storage_slot_state_gas=storage_slot_state_gas,
         new_accounts=new_accounts,
+        new_account_state_bytes=new_account_state_bytes,
+        new_account_state_gas=new_account_state_gas,
         code_bytes=code_bytes,
+        code_deposit_state_bytes=code_deposit_state_bytes,
+        code_deposit_state_gas=code_deposit_state_gas,
         new_delegation_indicators=new_delegation_indicators,
+        delegation_indicator_state_bytes=delegation_indicator_state_bytes,
+        delegation_indicator_state_gas=delegation_indicator_state_gas,
         state_bytes_equivalent=state_bytes_equivalent,
-        state_gas_used=state_bytes_equivalent * int(cpsb),
+        state_gas_used=state_gas_used,
     )
 
 

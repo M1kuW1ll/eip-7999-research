@@ -397,10 +397,17 @@ def process_balance_changes(
 
                 if sender:
                     sender_pre = parse_int(balance_touches_for_tx.get(sender), 0)
+                    # A post-transaction balance is non-negative. When the
+                    # sender's pre-balance is unavailable (no full trace, so
+                    # balance_touches is empty) sender_pre falls back to 0 and
+                    # the gas fee would drive this negative, which is both
+                    # semantically wrong and unencodable in RLP; clamp it. For
+                    # the read-backed path sender_pre is the real balance and a
+                    # fee never exceeds it, so this is a no-op there.
                     builder.add_balance_change(
                         canonical_address(sender),
                         block_access_index_for_tx(tx_index),
-                        sender_pre - total_gas_fee,
+                        max(sender_pre - total_gas_fee, 0),
                     )
                     touched_addresses.add(sender)
                     processed.add(sender)

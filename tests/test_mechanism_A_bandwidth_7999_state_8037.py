@@ -231,6 +231,34 @@ class MechanismATest(unittest.TestCase):
         self.assertGreater(results[1].excess_gas_by_resource["bandwidth"], 0)
         self.assertLess(results[1].base_fee_by_resource["bandwidth"], 3)
 
+    def test_bandwidth_warm_starts_excess_from_initial_base_fee(self):
+        config = make_mechanism_A_config(
+            execution_state_gas_limit=100_000_000,
+            bandwidth_gas_limit=40_000_000,
+            initial_execution_state_base_fee=75_000_000,
+            initial_bandwidth_base_fee=75_000_000,
+        )
+
+        result = replay_bandwidth_7999_state_8037(
+            [
+                block(
+                    execution_gas_used=1,
+                    state_gas_used=1,
+                    bandwidth_gas=1,
+                    bandwidth_bytes=1,
+                    blob_base_fee_per_gas=1,
+                )
+            ],
+            config,
+        )[0]
+
+        self.assertEqual(
+            result.base_fee_by_resource["execution_state"],
+            75_000_000,
+        )
+        self.assertEqual(result.base_fee_by_resource["bandwidth"], 75_000_000)
+        self.assertGreater(result.excess_gas_by_resource["bandwidth"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

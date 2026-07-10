@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from basefee.eip7999_normalized import ResourceFeeConfig
+from basefee.eip7999_normalized import (
+    ResourceFeeConfig,
+    excess_gas_for_base_fee,
+)
 
 
 @dataclass(frozen=True)
@@ -12,6 +15,7 @@ class MechanismConfig:
     name: str
     resources: dict[str, ResourceFeeConfig]
     initial_base_fee_by_resource: dict[str, int] = field(default_factory=dict)
+    initial_excess_gas_by_resource: dict[str, int] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         for resource_name, config in self.resources.items():
@@ -27,10 +31,23 @@ class MechanismConfig:
                 "initial base fee specified for unknown resources: "
                 + ", ".join(sorted(unknown_initial_fees))
             )
+        unknown_initial_excesses = set(self.initial_excess_gas_by_resource) - set(
+            self.resources
+        )
+        if unknown_initial_excesses:
+            raise ValueError(
+                "initial excess gas specified for unknown resources: "
+                + ", ".join(sorted(unknown_initial_excesses))
+            )
         for resource_name, base_fee in self.initial_base_fee_by_resource.items():
             if base_fee < self.resources[resource_name].min_base_fee:
                 raise ValueError(
                     f"initial base fee for {resource_name} must be >= min_base_fee"
+                )
+        for resource_name, excess_gas in self.initial_excess_gas_by_resource.items():
+            if excess_gas < 0:
+                raise ValueError(
+                    f"initial excess gas for {resource_name} must be non-negative"
                 )
 
 
@@ -40,6 +57,10 @@ def _target_from_ratio(gas_limit: int, target_ratio: int) -> int:
     if target_ratio <= 0:
         raise ValueError("target_ratio must be positive")
     return int(gas_limit) // int(target_ratio)
+
+
+def _warm_start_excess_gas(base_fee: int, resource: ResourceFeeConfig) -> int:
+    return excess_gas_for_base_fee(int(base_fee), resource)
 
 
 def make_glamsterdam_only_config(
@@ -128,6 +149,12 @@ def make_mechanism_A_config(
             "execution_state": int(initial_execution_state_base_fee),
             "bandwidth": int(initial_bandwidth_base_fee),
         },
+        initial_excess_gas_by_resource={
+            "bandwidth": _warm_start_excess_gas(
+                int(initial_bandwidth_base_fee),
+                bandwidth,
+            ),
+        },
     )
 
 
@@ -199,5 +226,19 @@ def make_full_7999_config(
             "execution": int(initial_execution_base_fee),
             "bandwidth": int(initial_bandwidth_base_fee),
             "state": int(initial_state_base_fee),
+        },
+        initial_excess_gas_by_resource={
+            "execution": _warm_start_excess_gas(
+                int(initial_execution_base_fee),
+                execution,
+            ),
+            "bandwidth": _warm_start_excess_gas(
+                int(initial_bandwidth_base_fee),
+                bandwidth,
+            ),
+            "state": _warm_start_excess_gas(
+                int(initial_state_base_fee),
+                state,
+            ),
         },
     )

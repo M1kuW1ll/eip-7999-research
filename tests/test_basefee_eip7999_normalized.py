@@ -8,6 +8,7 @@ from basefee import (
     apply_resource_block,
     apply_vector_block,
     compute_base_fee,
+    excess_gas_for_base_fee,
     fake_exponential,
     reserve_anchor_threshold_base_fee,
     reserve_price_active,
@@ -109,6 +110,19 @@ class EIP7999NormalizedBaseFeeTest(unittest.TestCase):
         high = compute_base_fee(excess_gas=300, config=config)
 
         self.assertGreater(high, base)
+
+    def test_excess_gas_for_base_fee_warm_starts_fake_exponential(self):
+        config = ResourceFeeConfig(
+            name="bandwidth",
+            gas_limit=60_000_000,
+            gas_target=15_000_000,
+        )
+
+        excess = excess_gas_for_base_fee(75_000_000, config)
+
+        self.assertGreater(excess, 0)
+        self.assertGreaterEqual(compute_base_fee(excess, config), 75_000_000)
+        self.assertLess(compute_base_fee(excess - 1, config), 75_000_000)
 
     def test_apply_resource_block_returns_next_state(self):
         config = ResourceFeeConfig(

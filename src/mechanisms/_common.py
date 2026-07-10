@@ -12,6 +12,7 @@ def initial_states(config: MechanismConfig) -> dict[str, ResourceFeeState]:
     return {
         name: ResourceFeeState(
             name=name,
+            excess_gas=config.initial_excess_gas_by_resource.get(name, 0),
             base_fee=config.initial_base_fee_by_resource.get(
                 name,
                 resource.min_base_fee,

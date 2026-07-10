@@ -58,6 +58,11 @@ reserve path as the full EIP-7999 replay. The reserve condition compares the
 bandwidth base fee to `blob_base_fee_per_gas / 12`, but it affects excess
 growth rather than hard-clamping the base fee.
 
+For passive replay, the new bandwidth fee starts from the first block's
+historical aggregate base fee. The notebook derives the corresponding initial
+normalized excess so the fake-exponential path continues from that historical
+price level instead of dropping to `min_base_fee`.
+
 ### Full EIP-7999: Execution + Bandwidth + State
 
 This replay lives in `notebooks/0.9-full-7999-passive-replay.ipynb`.
@@ -102,6 +107,11 @@ The reserve path changes the bandwidth excess-gas update; it is not a hard
 historical `blob_base_fee_per_gas` from the blob-fee sample before replaying
 bandwidth, and reports `ceil(blob_base_fee_per_gas / 12)` only as a diagnostic
 anchor threshold.
+
+The separated execution, bandwidth, and state fee dimensions are warm-started
+from the first block's historical aggregate base fee. For each fake-exponential
+resource, the notebook derives the initial normalized excess that corresponds to
+that base fee, then lets each dimension drift independently.
 
 ## Data Pipeline
 

@@ -18,7 +18,8 @@ rest
   = data + execution
 ```
 
-Maria's EIP-8037 analysis estimates how demand splits between state creation and the
+[Prior EIP-8037 analysis](https://ethresear.ch/t/empirical-analysis-of-price-elasticities-for-ethereum-state-and-burst-resources/24166)
+estimates how demand splits between state creation and the
 remaining burst/rest bucket. Our question is narrower: inside the rest bucket,
 how much more price-sensitive is data demand than execution demand?
 
@@ -40,7 +41,7 @@ $$
 $$
 
 $$
-\alpha_{\text{data}|\text{rest}} \approx 0.0525
+\alpha_{\text{data}\mid\text{rest}} \approx 0.0525
 $$
 
 $$
@@ -66,7 +67,19 @@ resource, not as a final estimate, because EIP-7623 only shocks calldata-heavy
 transactions, while the future bandwidth resource also includes access-list
 bytes, authorization tuples, blob hashes, and BAL bytes.
 
-For simulations, the recommended sweep is:
+For the Glamsterdam pilot, the cleaner central object to carry forward is the recovered
+own-price prior:
+
+$$
+\epsilon_{\text{data}}^{\text{prior}} \approx 0.487
+$$
+
+The corresponding $\eta_{\text{data}}$ is still useful inside the nested demand
+model, but it is a model parameter derived from the chosen share basis. Treating
+$\epsilon_{\text{data}}$ as the fixed prior avoids making the central data
+elasticity depend on the 500-block pilot composition.
+
+For broader sensitivity, the recommended sweep remains:
 
 $$
 \eta_{\text{data}}
@@ -79,23 +92,13 @@ calldata-vs-execution prior. The gas-limit event study supports the lower part
 of this sweep, roughly $\eta_{\text{data}} \approx 0.1$ to $0.3$, but is
 noisier and therefore should not replace the EIP-7623 central value.
 
-## 2. Relation to Maria's State-vs-Rest Report
-
-Maria's report, "Empirical Analysis of Price Elasticities for Ethereum State
-and Burst Resources", uses a capacity-constrained demand model rather than
-independent per-resource demand curves.
-
-Reference:
-https://ethresear.ch/t/empirical-analysis-of-price-elasticities-for-ethereum-state-and-burst-resources/24166
+## 2. Relation to Prior State-vs-Rest Analysis
 
 The key structure is:
 
-```text
-total demand responds to the overall base fee
-resource shares respond to relative prices
-```
+Total demand responds to the overall base fee, and resource shares respond to
+relative prices.
 
-Maria estimates:
 
 $$
 \epsilon_{\text{agg}} \approx 0.175
@@ -126,7 +129,7 @@ $$
 Our report reuses the same logic, but applies it one level deeper:
 
 ```text
-Maria:
+Prior:
   state vs. rest
 
 This note:
@@ -147,7 +150,7 @@ rest = data + execution
 Define the data share inside rest:
 
 $$
-\alpha_{\text{data}|\text{rest}}
+\alpha_{\text{data}\mid\text{rest}}
 =
 \frac{\text{data}}{\text{data} + \text{execution}}
 $$
@@ -158,21 +161,60 @@ $$
 \eta_{\text{data}}
 =
 -\frac{
-  \Delta \operatorname{logit}(\alpha_{\text{data}|\text{rest}})
+  \Delta \operatorname{logit}(\alpha_{\text{data}\mid\text{rest}})
 }{
   \Delta \log(\text{relative data price})
 }
 $$
 
-where:
+The logit is just the log of the odds of a share:
+
+$$
+\operatorname{odds}(\alpha)
+=
+\frac{\alpha}{1-\alpha}
+$$
 
 $$
 \operatorname{logit}(\alpha)
 =
+\log\left(\operatorname{odds}(\alpha)\right)
+=
 \log\left(\frac{\alpha}{1-\alpha}\right)
 $$
 
-This is parallel to Maria's state-share elasticity:
+For example, if data is 5% of rest:
+
+$$
+\alpha = 0.05
+$$
+
+$$
+\operatorname{odds}(\alpha)
+=
+\frac{0.05}{0.95}
+\approx 0.0526
+$$
+
+$$
+\operatorname{logit}(\alpha)
+=
+\log(0.0526)
+\approx -2.94
+$$
+
+We use the change in logit rather than the raw change in share because a share
+is bounded between 0 and 1. The logit turns the share into an unbounded
+log-odds scale. For small shares, like data inside rest, a logit change is close
+to a proportional change in the share.
+
+```text
+relative data price rises
+data share falls
+eta_data is positive
+```
+
+This is parallel to prior state-share elasticity:
 
 $$
 \eta_{\text{state}}
@@ -185,47 +227,47 @@ $$
 $$
 
 Once we have $\eta_{\text{data}}$, we recover structural elasticities using the same
-share-weighted system:
+share-weighted system. To keep the equations readable, define:
 
 $$
-\epsilon_{\text{rest}}
-=
-\alpha_{\text{data}|\text{rest}}\epsilon_{\text{data}}
-+
-\left(1-\alpha_{\text{data}|\text{rest}}\right)\epsilon_{\text{execution}}
+a \equiv \alpha_{\mathrm{data}\mid\mathrm{rest}}
 $$
 
+Then the rest-bucket elasticity is the share-weighted average of data and
+execution elasticities:
+
 $$
-\eta_{\text{data}}
+\epsilon_{\mathrm{rest}}
+= a\,\epsilon_{\mathrm{data}} + (1-a)\,\epsilon_{\mathrm{execution}}
+$$
+
+and the data-vs-execution substitution parameter is:
+
+$$
+\eta_{\mathrm{data}}
 =
-\epsilon_{\text{data}} - \epsilon_{\text{execution}}
+\epsilon_{\mathrm{data}}-\epsilon_{\mathrm{execution}}
 $$
 
 Solving:
 
 $$
-\epsilon_{\text{data}}
+\epsilon_{\mathrm{data}}
 =
-\epsilon_{\text{rest}}
-+
-\eta_{\text{data}}\left(1-\alpha_{\text{data}|\text{rest}}\right)
+\epsilon_{\mathrm{rest}} +
+\eta_{\mathrm{data}}(1-a)
 $$
 
 $$
-\epsilon_{\text{execution}}
+\epsilon_{\mathrm{execution}}
 =
-\epsilon_{\text{rest}}
--
-\eta_{\text{data}}\alpha_{\text{data}|\text{rest}}
+\epsilon_{\mathrm{rest}} -
+\eta_{\mathrm{data}}a
 $$
 
-This is why $\eta_{\text{data}}$ alone is not enough. We also need:
+where $\epsilon_{\text{rest}} = 0.08$ from Prior 8037 analysis, and $\alpha$ can
+be derived from empirical data.
 
-$$
-\epsilon_{\text{rest}}
-\quad\text{and}\quad
-\alpha_{\text{data}|\text{rest}}
-$$
 
 ## 4. Event: EIP-7623 as a Calldata Price Shock
 
@@ -266,19 +308,19 @@ The main event window is:
 
 ```text
 pre:  March 7, 2025 to May 6, 2025
-post: May 9, 2025 to July 7, 2025
+post: May 8, 2025 to July 7, 2025
 ```
 
 The activation is excluded.
 
 State-cleaned result:
 
-| Quantity | Value |
-|---|---:|
-| Pre treated data share proxy | 0.654% |
-| Post treated data share proxy | 0.475% |
+| Quantity                                      | Value |
+|-----------------------------------------------|---:|
+| Pre inferred floor-bound calldata share     | 0.654% |
+| Post inferred floor-bound calldata share     | 0.475% |
 | $\eta_{\text{data}}$ using 2.5x theoretical ratio | 0.350 |
-| $\eta_{\text{data}}$ using effective ratio | 0.429 |
+| $\eta_{\text{data}}$ using effective ratio    | 0.429 |
 
 The state-cleaned estimate is preferred because the data-vs-execution split is
 supposed to live inside the non-state rest bucket. If state creation gas remains
@@ -309,7 +351,7 @@ $$
 \eta_{\text{data}}
 \approx
 -\frac{
-  \Delta \operatorname{logit}(\alpha_{\text{data}|\text{rest}})
+  \Delta \operatorname{logit}(\alpha_{\text{data}\mid\text{rest}})
 }{
   \Delta \log(\text{base fee})
 }
@@ -325,7 +367,7 @@ state_inventory_delta_gas_proxy =
   + max(0, Delta contract_code_bytes) * 200
 ```
 
-This keeps the analysis in the H0 historical world. It is intentionally a broad
+This keeps the analysis in the historical/current-fee-market world. It is intentionally a broad
 daily proxy, not the exact 500-block RPC-calibrated state creation estimator used
 for mechanism replay.
 
@@ -403,7 +445,7 @@ For recovering structural elasticities, the notebook uses the pre-fork
 state-cleaned standard calldata share:
 
 $$
-\alpha_{\text{data}|\text{rest}} = 0.052494
+\alpha_{\text{data}\mid\text{rest}} = 0.052494
 $$
 
 That means:
@@ -416,7 +458,7 @@ execution is about 94.75% of the non-state rest bucket
 The full-window state-cleaned value is similar:
 
 $$
-\alpha_{\text{data}|\text{rest}} = 0.049567
+\alpha_{\text{data}\mid\text{rest}} = 0.049567
 $$
 
 for the full window excluding the activation day.
@@ -432,7 +474,7 @@ $$
 $$
 
 $$
-\alpha_{\text{data}|\text{rest}} = 0.052494
+\alpha_{\text{data}\mid\text{rest}} = 0.052494
 $$
 
 we recover:
@@ -442,7 +484,7 @@ $$
 =
 \epsilon_{\text{rest}}
 +
-\eta_{\text{data}}\left(1-\alpha_{\text{data}|\text{rest}}\right)
+\eta_{\text{data}}\left(1-\alpha_{\text{data}\mid\text{rest}}\right)
 $$
 
 $$
@@ -450,7 +492,7 @@ $$
 =
 \epsilon_{\text{rest}}
 -
-\eta_{\text{data}}\alpha_{\text{data}|\text{rest}}
+\eta_{\text{data}}\alpha_{\text{data}\mid\text{rest}}
 $$
 
 Sweep results:
@@ -610,14 +652,26 @@ $$
 \eta_{\text{state}} \approx 0.43
 $$
 
-Then split rest using:
+Then split rest using the EIP-7623 calldata prior. There are two equivalent
+ways to express the central case:
 
 $$
 \eta_{\text{data}} \approx 0.43
 $$
 
+is the event-study share/substitution estimate, while:
+
 $$
-\alpha_{\text{data}|\text{rest}} \approx 0.0525
+\epsilon_{\text{data}}^{\text{prior}} \approx 0.487
+$$
+
+is the recovered calldata own-price elasticity. For the Glamsterdam pilot, use
+$\epsilon_{\text{data}}^{\text{prior}}$ as the fixed central prior and convert
+it into the model's internal $\eta_{\text{data}}$ only when the nested demand
+system requires it.
+
+$$
+\alpha_{\text{data}\mid\text{rest}} \approx 0.0525
 $$
 
 Recommended sweep:
@@ -635,7 +689,7 @@ $$
 =
 \epsilon_{\text{rest}}
 +
-\eta_{\text{data}}\left(1-\alpha_{\text{data}|\text{rest}}\right)
+\eta_{\text{data}}\left(1-\alpha_{\text{data}\mid\text{rest}}\right)
 $$
 
 $$
@@ -643,7 +697,7 @@ $$
 =
 \epsilon_{\text{rest}}
 -
-\eta_{\text{data}}\alpha_{\text{data}|\text{rest}}
+\eta_{\text{data}}\alpha_{\text{data}\mid\text{rest}}
 $$
 
 Guardrail:
@@ -653,13 +707,37 @@ $$
 $$
 
 Given $\epsilon_{\text{rest}} = 0.08$ and
-$\alpha_{\text{data}|\text{rest}} = 0.052494$, the upper bound is:
+$\alpha_{\text{data}\mid\text{rest}} = 0.052494$, the upper bound is:
 
 $$
 \eta_{\text{data}} \le 1.524
 $$
 
 So the proposed sweep remains inside the nonnegative-execution region.
+
+When using the fixed data-elasticity prior directly, the corresponding execution
+elasticity is recovered from:
+
+$$
+\epsilon_{\text{rest}}
+=
+\alpha_{\text{data}\mid\text{rest}}\epsilon_{\text{data}}^{\text{prior}}
++
+\left(1-\alpha_{\text{data}\mid\text{rest}}\right)\epsilon_{\text{execution}}
+$$
+
+or:
+
+$$
+\epsilon_{\text{execution}}
+=
+\frac{
+  \epsilon_{\text{rest}}
+  - \alpha_{\text{data}\mid\text{rest}}\epsilon_{\text{data}}^{\text{prior}}
+}{
+  1-\alpha_{\text{data}\mid\text{rest}}
+}
+$$
 
 ## 15. Caveats
 
@@ -691,7 +769,7 @@ Blob market conditions and L2 batching behavior may confound the event. The
 next version should add blob base fee, blob usage, and known L2 poster activity
 as controls or stratification variables.
 
-Finally, this is an H0 historical estimate. When applying it to Glamsterdam,
+Finally, this is a historical estimate. When applying it to Glamsterdam,
 Mechanism A, or full EIP-7999, the accounting must be rebased first. The
 elasticities are behavioral priors; they do not replace mechanism-specific
 repricing.
@@ -718,10 +796,18 @@ $$
 \epsilon_{\text{execution}} \approx 0.057
 $$
 
-Use this as a sweep prior, not as a fixed truth. The gas-limit cross-check gives
-a weaker but useful second signal: common-price events mostly support small
-positive values, around $0.1$ to $0.3$, while EIP-7623 supports the higher
-central value around $0.43$.
+Use this as a behavioral prior, not as a fixed truth. For the Glamsterdam pilot, the
+most readable central input is:
+
+$$
+\epsilon_{\text{data}}^{\text{prior}} \approx 0.487
+$$
+
+The associated $\eta_{\text{data}} \approx 0.43$ remains useful for sensitivity
+sweeps and for translating the prior into the nested demand model. The gas-limit
+cross-check gives a weaker but useful second signal: common-price events mostly
+support small positive values, around $0.1$ to $0.3$, while EIP-7623 supports the
+higher central value around $0.43$.
 
 Together, these plug the main gap left by Maria's state-vs-rest analysis: they
 give a first-pass empirical handle on how the rest bucket should split into data

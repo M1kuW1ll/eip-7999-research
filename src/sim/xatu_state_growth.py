@@ -55,6 +55,14 @@ def _empty_state_growth_frame() -> pd.DataFrame:
             "eip8037_new_accounts",
             "eip8037_code_bytes",
             "eip8037_new_delegation_indicators",
+            "eip8037_storage_slot_state_bytes",
+            "eip8037_storage_slot_state_gas",
+            "eip8037_new_account_state_bytes",
+            "eip8037_new_account_state_gas",
+            "eip8037_code_deposit_state_bytes",
+            "eip8037_code_deposit_state_gas",
+            "eip8037_delegation_indicator_state_bytes",
+            "eip8037_delegation_indicator_state_gas",
             "eip8037_type4_tx_count",
             "eip8037_state_bytes_equivalent",
             "eip8037_state_gas_used",
@@ -540,17 +548,47 @@ def query_xatu_state_growth_by_block(
     # entries. The RPC authorization-list notebook adds an upper-bound
     # delegation-indicator sensitivity separately.
     out["eip8037_new_delegation_indicators"] = 0
-    out["eip8037_state_bytes_equivalent"] = (
+
+    out["eip8037_storage_slot_state_bytes"] = (
         out["eip8037_new_storage_slots"].astype("int64")
         * STATE_BYTES_PER_STORAGE_SET
-        + out["eip8037_new_accounts"].astype("int64")
+    )
+    out["eip8037_new_account_state_bytes"] = (
+        out["eip8037_new_accounts"].astype("int64")
         * STATE_BYTES_PER_NEW_ACCOUNT
-        + out["eip8037_code_bytes"].astype("int64")
-        + out["eip8037_new_delegation_indicators"].astype("int64")
+    )
+    out["eip8037_code_deposit_state_bytes"] = out[
+        "eip8037_code_bytes"
+    ].astype("int64")
+    out["eip8037_delegation_indicator_state_bytes"] = (
+        out["eip8037_new_delegation_indicators"].astype("int64")
         * STATE_BYTES_PER_DELEGATION_INDICATOR
     )
+
+    out["eip8037_storage_slot_state_gas"] = (
+        out["eip8037_storage_slot_state_bytes"].astype("int64") * int(cpsb)
+    )
+    out["eip8037_new_account_state_gas"] = (
+        out["eip8037_new_account_state_bytes"].astype("int64") * int(cpsb)
+    )
+    out["eip8037_code_deposit_state_gas"] = (
+        out["eip8037_code_deposit_state_bytes"].astype("int64") * int(cpsb)
+    )
+    out["eip8037_delegation_indicator_state_gas"] = (
+        out["eip8037_delegation_indicator_state_bytes"].astype("int64") * int(cpsb)
+    )
+
+    out["eip8037_state_bytes_equivalent"] = (
+        out["eip8037_storage_slot_state_bytes"]
+        + out["eip8037_new_account_state_bytes"]
+        + out["eip8037_code_deposit_state_bytes"]
+        + out["eip8037_delegation_indicator_state_bytes"]
+    )
     out["eip8037_state_gas_used"] = (
-        out["eip8037_state_bytes_equivalent"].astype("int64") * int(cpsb)
+        out["eip8037_storage_slot_state_gas"]
+        + out["eip8037_new_account_state_gas"]
+        + out["eip8037_code_deposit_state_gas"]
+        + out["eip8037_delegation_indicator_state_gas"]
     )
     out["eip8037_state_gas_source"] = (
         "xatu_raw_diffs_counterfactual_eip8037"

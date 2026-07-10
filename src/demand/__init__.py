@@ -1,4 +1,4 @@
-"""Aggregate + share demand system and world equilibrium solves."""
+"""Demand models, equilibrium solves, and empirical joint shock paths."""
 
 from .cross import (
     CrossElasticityDemand,
@@ -24,6 +24,16 @@ from .model import (
     implied_anchor_elasticities,
     price_index_ratio,
 )
+from .shocks import (
+    Frequency,
+    JointShockPanel,
+    JointShockPath,
+    ShockBasis,
+    ShockEstimationSpec,
+    empirical_shock_path,
+    estimate_joint_shocks,
+    vector_moving_block_bootstrap,
+)
 
 __all__ = [
     "CrossElasticityDemand",
@@ -44,4 +54,12 @@ __all__ = [
     "implied_anchor_elasticities",
     "price_index_ratio",
     "solve_equilibrium",
+    "Frequency",
+    "ShockBasis",
+    "ShockEstimationSpec",
+    "JointShockPanel",
+    "JointShockPath",
+    "estimate_joint_shocks",
+    "empirical_shock_path",
+    "vector_moving_block_bootstrap",
 ]

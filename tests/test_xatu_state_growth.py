@@ -138,6 +138,14 @@ def test_eip8037_state_gas_is_recomputed_from_raw_diffs():
     assert row["gas_state_growth"] == 999
     assert row["eip8037_new_account_candidates"] == 3
     assert row["eip8037_new_accounts"] == 2
+    assert row["eip8037_storage_slot_state_bytes"] == 2 * 64
+    assert row["eip8037_storage_slot_state_gas"] == 2 * 64 * 1530
+    assert row["eip8037_new_account_state_bytes"] == 2 * 120
+    assert row["eip8037_new_account_state_gas"] == 2 * 120 * 1530
+    assert row["eip8037_code_deposit_state_bytes"] == 10
+    assert row["eip8037_code_deposit_state_gas"] == 10 * 1530
+    assert row["eip8037_delegation_indicator_state_bytes"] == 0
+    assert row["eip8037_delegation_indicator_state_gas"] == 0
     assert row["eip8037_state_bytes_equivalent"] == expected_state_bytes
     assert row["eip8037_state_gas_used"] == expected_state_gas
     assert row["state_gas_used"] == expected_state_gas

@@ -67,8 +67,16 @@ def test_summarize_rpc_state_growth_counts_eip8037_components():
     )
 
     assert summary.new_storage_slots == 1
+    assert summary.storage_slot_state_bytes == 64
+    assert summary.storage_slot_state_gas == 64 * 1530
     assert summary.new_accounts == 2
+    assert summary.new_account_state_bytes == 2 * 120
+    assert summary.new_account_state_gas == 2 * 120 * 1530
     assert summary.code_bytes == 4
+    assert summary.code_deposit_state_bytes == 4
+    assert summary.code_deposit_state_gas == 4 * 1530
     assert summary.new_delegation_indicators == 1
+    assert summary.delegation_indicator_state_bytes == 23
+    assert summary.delegation_indicator_state_gas == 23 * 1530
     assert summary.state_bytes_equivalent == 64 + 2 * 120 + 4 + 23
     assert summary.state_gas_used == summary.state_bytes_equivalent * 1530

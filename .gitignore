@@ -15,3 +15,11 @@ __pycache__/
 # Local editor and OS state
 .idea/
 .DS_Store
+
+.claude/
+.matplotlib-cache/
+
+markdowns/questions.md
+markdowns/demand_model_plan.md
+
+plots/
