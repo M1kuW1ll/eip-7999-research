@@ -213,6 +213,12 @@ def calibration_row_from_block_data(
         row["bal_balance_changes"] = bal.balance_changes
         row["bal_nonce_changes"] = bal.nonce_changes
         row["bal_code_bytes"] = bal.code_bytes
+        row["bal_storage_writes_rlp_bytes"] = bal.storage_writes_rlp_bytes
+        row["bal_storage_reads_rlp_bytes"] = bal.storage_reads_rlp_bytes
+        row["bal_balance_changes_rlp_bytes"] = bal.balance_changes_rlp_bytes
+        row["bal_nonce_changes_rlp_bytes"] = bal.nonce_changes_rlp_bytes
+        row["bal_code_changes_rlp_bytes"] = bal.code_changes_rlp_bytes
+        row["bal_account_shell_rlp_bytes"] = bal.account_shell_rlp_bytes
         row["bal_include_reads"] = bal.include_reads
         row["bal_include_system_changes"] = bal.include_system_changes
     row.update(_summarize_access_lists(block_number, transactions))

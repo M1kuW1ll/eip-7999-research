@@ -20,7 +20,7 @@ The notebook's correlated block shocks are a controlled mechanics test, not an e
 
 ## 0. The three resources and two conventions
 
-The mechanism side ([src/mechanisms/full_7999.py](../src/mechanisms/full_7999.py)) separates **execution**, **bandwidth**, and **state**. The driven demand side ([src/dynamics/demand.py](../src/dynamics/demand.py)) names its resources `execution`, `data`, `state`, where **`data` ≡ the bandwidth resource** (calldata + BAL + access-list + authorization + blob-hash bytes, mapped to resource gas). The mapping is explicit at the replay boundary.
+The mechanism side ([src/mechanisms/full_7999.py](../src/mechanisms/full_7999.py)) separates **execution**, **bandwidth**, and **state**. The driven demand side ([src/dynamics/demand.py](../src/dynamics/demand.py)) names its resources `execution`, `data`, `state`, where **`data` ≡ the bandwidth resource**. Its accounting is decomposed into static transaction content (calldata + access-list + authorization + blob-hash bytes) and BAL bytes induced by parent execution/state-access activity. The mapping is explicit at the replay boundary.
 
 Elasticities are recovered from historical physical quantities. Notebook 2.0 then transports each anchor into candidate-world resource gas while preserving the historical effective price. The driven replay consumes those candidate-world gas anchors directly, so it does not apply the metering conversion a second time.
 
@@ -35,19 +35,32 @@ The equilibrium model does **not** need to feed the dynamic model as a required 
 
 ### 1.1 Equilibrium initialization
 
-For full 7999, notebook 2.0 solves three independent target-clearing conditions,
+For full 7999, notebook 2.0 retains independent target-clearing conditions for execution and persistent state creation,
 
 $$
 g_i(p_i)=g_i^0\left(\frac{p_i}{p_i^0}\right)^{-\epsilon_i}=T_i,
 $$
 
-and converts each continuous solution to the nearest fee represented by the integer fake exponential. The replay must initialize from that represented protocol fee, not from a rounded continuous fee paired with unrelated excess gas. `make_full_7999_config` performs the inverse fake-exponential warm start.
+but decomposes data demand as
+
+$$
+D_{\mathrm{total}}(p_D)
+=D_{\mathrm{static},0}
+\left(\frac{p_D}{p_D^0}\right)^{-\epsilon_{\mathrm{static}}}
++B_0\left[
+(1-w_S)\frac{A^*}{A_0}
++w_S\frac{S^*}{S_0}
+\right]
+\left(\frac{p_D}{p_D^0}\right)^{-\gamma_{\mathrm{BAL}}}.
+$$
+
+Here $A$ is state-access activity and $S$ is persistent state creation. Notebook 1.11 estimates that $w_S=0.1328$ of BAL bytes are directly linked to newly created storage slots, accounts, and code; the remaining 0.8672 stays with state-access activity. Because no independent historical access-price curve is available, notebook 2.0 uses the physical execution quantity $E^*=T_E/m_E$ as the reduced-form proxy for $A^*$. The central case sets $\gamma_{\mathrm{BAL}}=0$: BAL gas scales with its parent quantities but is not assigned the static-data elasticity. Notebook 2.0 solves the coupled data condition numerically and converts each continuous solution to the nearest fee represented by the integer fake exponential. The replay must initialize from that represented protocol fee, not from a rounded continuous fee paired with unrelated excess gas. `make_full_7999_config` performs the inverse fake-exponential warm start.
 
 The unconstrained equilibrium intentionally omits the data reserve. That is appropriate for initialization. With the reserve enabled, the dynamic path may settle away from the unconstrained target-clearing fee; this is a result rather than a validation failure. Notebook 2.1 therefore compares both the unconstrained data-fee start and a start at the contemporaneous blob-fee/12 threshold.
 
 ### 1.2 Demand, shocks, and transaction coupling
 
-The central benchmark uses the independently recovered elasticities:
+The central benchmark uses the independently recovered elasticities for execution, static data, and persistent state creation. BAL gas is then generated from the parent activity rather than shocked or price-scaled as if it were independently demanded:
 
 $$
 Q_{i,t}^{\mathrm{offered}}
@@ -55,6 +68,18 @@ Q_{i,t}^{\mathrm{offered}}
 g_i^0\left(\frac{p_{i,t}}{p_i^0}\right)^{-\epsilon_i}s_{i,t},
 \qquad E[s_{i,t}]\approx 1.
 $$
+
+In the first reduced-form implementation,
+
+$$
+B_t=B_0\left[
+(1-w_S)\frac{A_t}{A_0}
++w_S\frac{S_t}{S_0}
+\right]
+\left(\frac{p_{D,t}}{p_D^0}\right)^{-\gamma_{\mathrm{BAL}}}.
+$$
+
+The full 120-day accounting gives $B_0/E_0=0.08846$ BAL gas per historical regular-execution gas. Notebook 1.11 then finds that only $w_S=0.1328$ is directly linked to state creation; reads and existing-state changes remain in $A_t$. The 2,000-block trace sample also shows that read-only slots are 58.4% of unique read-or-written storage slots, so persistent state-growth gas cannot replace the access driver. Until an explicit access index is available, the implementation proxies $A_t/A_0$ with $E_t/E_0$.
 
 The shock vector is resampled jointly, and bootstrap chunks are contiguous. This preserves contemporaneous execution/data/state co-movement and short-run persistence. It does **not** create counterfactual transaction coupling. A transaction consuming several resources should respond to several fees; that enters separately through the elasticity-matrix demand sensitivity in [src/dynamics/demand.py](../src/dynamics/demand.py). Capacity coupling is also separate: the fixed-bundle inclusion sensitivity scales the resource vector together when one hard limit binds.
 
@@ -74,9 +99,9 @@ The first trend is a centered 21-day rolling log-median, with window sensitivity
 The base fee is **predetermined** (block *t*'s fee is set by block *t−1*'s excess), so there is **no per-block fixed point** — just a forward recursion. Per block *t*:
 
 1. Read the current execution/data/state fees from the parent excess states.
-2. Evaluate the three isoelastic demand curves at those fees.
-3. Multiply by the current joint shock vector.
-4. Apply the selected inclusion rule. The central aggregate rule caps execution and data separately; state remains uncapped. Record offered, included, and unserved gas separately.
+2. Evaluate the execution, static-data, and persistent-state isoelastic demand curves at those fees.
+3. Multiply the parent activities by the current joint shock vector, derive BAL gas from the shocked execution/state-access activity, and add it to static data to obtain total offered bandwidth gas. Do not shock or price-scale BAL as an independent demand resource.
+4. Apply the selected inclusion rule. The central aggregate rule caps execution and total data separately; state remains uncapped. Record offered, included, and unserved gas separately.
 5. Call `step_full_7999`, the same exact one-block transition used by passive notebook 0.9.
 6. Record both the fee governing the current block and the fee produced for the next block, plus reserve status, targets, limits, and source shock positions.
 
@@ -121,11 +146,14 @@ Split into "estimate from data," "bound by sensitivity," and "configure from the
 - **H0 anchor**: per-resource physical quantities and observed effective prices — from the Xatu/RPC block pipeline already built.
 - **Independent elasticities `eps_execution`, `eps_data`, and `eps_state`**: recovered in notebook 1.8. Use the 35-day estimates centrally and sweep the 21-, 60-, and 75-day windows.
 - **Shock process**: the price-neutral baseline, the shock distribution, and the **bootstrap window length** that reproduces historical autocorrelation and cross-resource correlation. Fit these choices to the price-adjusted shock observations.
-- **BAL gas-per-byte / bandwidth metering multiplier**: the byte→resource-gas mapping (candidate `16 gas/byte`), calibrated so the H0 bandwidth quantity and price are consistent.
+- **Static bandwidth metering**: the byte→resource-gas mapping (candidate `16 gas/byte`) for calldata, access lists, authorization tuples, and blob hashes.
+- **BAL technological coefficient**: the full-range pooled ratio $B_0/E_0=0.08846$ BAL gas per historical regular-execution gas, equivalent to about 5.53 kB of BAL payload per million execution gas.
+- **Direct state-creation-linked BAL weight**: notebook 1.11 maps exact BAL component counts over 2,000 sampled blocks across 120 days. The strict and extended direct-entry estimates are 0.1301 and 0.1354, with their midpoint 0.1328 used centrally.
 
 **Bounded by sensitivity, not estimated**
 
 - **BAL-bandwidth price response**: this channel never varied independently in historical data, so it is swept over a plausible range rather than point-estimated. Report metrics across the range.
+- **State-access quantity proxy**: total execution quantity is used temporarily for $A_t$. This is broader than state access and should be replaced by an explicit access index before interpreting the coupling structurally.
 - **Cross-price complementarity and substitution terms** not separately identified by the gas-limit events.
 
 **Configured from the EIPs (kept as inputs so the analysis reruns)**
@@ -152,5 +180,5 @@ Historical usage variation is partly exogenous shock and partly the market's res
 3. **Implemented:** price-adjusted empirical shocks, empirical slicing, and joint moving-window bootstrap with a frequency guard.
 4. **Next data task:** build a longer contiguous block panel from inexpensive execution/data/state proxies; exact RPC tracing is not required. Combine normalized within-day block variation with the daily demand condition rather than repeating daily values.
 5. **Next mechanism task:** add the Glamsterdam driven runner and compare both mechanisms under identical shock positions.
-6. **Next coupling task:** estimate cross-price exposure bounds and replace the fixed-bundle inclusion sensitivity with transaction-recipe or transaction-level packing.
+6. **Next coupling task:** replace total execution gas with an explicit state-access index, then estimate cross-price exposure bounds and transaction-recipe or transaction-level packing.
 7. **Implemented validation:** target demand preserves the notebook-2.0 integer warm starts; elasticity-off driven replay matches passive replay. **Remaining validation:** historical-init versus equilibrium-init convergence, bootstrap moment diagnostics, and window-length/elasticity sensitivity.

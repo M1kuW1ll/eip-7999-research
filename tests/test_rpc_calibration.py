@@ -126,6 +126,16 @@ def test_calibration_row_combines_state_bal_access_auth():
     assert row["bal_rlp_bytes"] > 0
     assert row["bal_storage_write_slots"] >= 1
     assert row["bal_accounts"] >= 1
+    component_byte_columns = [
+        "bal_storage_writes_rlp_bytes",
+        "bal_storage_reads_rlp_bytes",
+        "bal_balance_changes_rlp_bytes",
+        "bal_nonce_changes_rlp_bytes",
+        "bal_code_changes_rlp_bytes",
+        "bal_account_shell_rlp_bytes",
+    ]
+    assert all(row[column] >= 0 for column in component_byte_columns)
+    assert sum(row[column] for column in component_byte_columns) == row["bal_rlp_bytes"]
 
     # Access lists decoded from block_info transactions.
     assert row["tx_access_list_tx_count"] == 1

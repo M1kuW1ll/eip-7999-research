@@ -22,4 +22,18 @@ __pycache__/
 markdowns/questions.md
 markdowns/demand_model_plan.md
 
-plots/
+# Generated plots. Keep only figures used by canonical reports in Git.
+/plots/*
+!/plots/three_way_shares_2025.png
+!/plots/three_way_levels_sweep_2025.png
+!/plots/three_way_equilibrium_gas_limit_curves_2026-02-01_2026-06-01.png
+!/plots/calibration_bal_regression_2026-02-01_2026-06-01.png
+!/plots/bal_state_creation_coupling_calibration_2026-02-01_2026-06-01.png
+!/plots/daily_accounting_bandwidth_components_calibrated_2026-02-01_2026-06-01.png
+!/plots/execution_repricing_8038_2780_2026-02-01_2026-06-01.png
+
+# Archived plots remain generated artifacts except where an archived report
+# still embeds the figure.
+/archived/plots/*
+!/archived/plots/g0_equilibrium_base_fee_model_24120001_24120500.png
+!/archived/plots/g0_dynamic_elastic_replay_check_24120001_24120500.png

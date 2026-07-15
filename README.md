@@ -1,326 +1,158 @@
-# EIP-7999 Multidimensional Fee/Resource Simulator
+# EIP-7999 Resource-Demand and Fee-Market Research
 
-This repository studies Ethereum fee-market designs where block resources are
-accounted separately instead of being collapsed into one gas counter.
+This repository studies Ethereum fee markets that price execution, data, and
+state creation separately. The current analysis has four stages:
 
-The current project focus is:
+1. reconstruct historical resource use under proposed metering rules;
+2. estimate independent isoelastic demand for execution, data, and state;
+3. solve target-clearing base fees for Glamsterdam and full EIP-7999; and
+4. use those equilibria to initialize a dynamic replay.
 
-- execution gas
-- bandwidth gas, currently modeled from calldata + BAL bytes + transaction
-  access-list bytes + authorization-list bytes + blob versioned hashes
-- state-growth gas under EIP-8037
+The central empirical model is the independent three-resource isoelastic model.
+The older aggregate-demand and nested-share equilibrium notebooks are retained
+under `archived/` for reference, but they are no longer part of the active
+workflow.
 
-The project is staged deliberately. First, derive bandwidth limits from payload
-propagation safety. Then build block-level resource inputs. Then replay
-candidate mechanisms passively before adding elasticity or transaction-packing
-models.
+## Canonical Reports
 
-## Current Mechanisms
+- `markdowns/project_proposal.md`: project motivation and research questions.
+- `markdowns/bandwidth_limit_report.md`: propagation-based data limits.
+- `markdowns/three_way_resource_elasticity_report.md`: independent execution,
+  data, and state elasticities.
+- `markdowns/three_way_glamsterdam_equilibrium_report.md`: Glamsterdam
+  equilibrium fees under EIP-8037 and execution repricing.
+- `markdowns/full_7999_data_metering_and_bal_report.md`: EIP-7999 static-data
+  metering and the BAL demand model.
+- `markdowns/modeling_plan.md`: equilibrium-initialized dynamic replay plan.
 
-### Mechanism 0: Glamsterdam / EIP-8037 Baseline
+Superseded reports and working notes are in `archived/markdowns/`.
 
-This is the committed passive replay baseline in
-`notebooks/0.7-glamsterdam-passive-replay.ipynb`.
+## Active Notebook Sequence
 
-The transaction-level regular-gas recalculation that feeds this baseline lives in
-`notebooks/0.6-glamsterdam-regular-gas-recalculation.ipynb`.
+### Resource construction and passive replay
 
-State growth remains under EIP-8037. The block-level bottleneck is:
+| Notebook | Purpose |
+|---|---|
+| `0.1-rpc-bal-rlp.ipynb` | Construct exact BAL RLP bytes from RPC traces. |
+| `0.2-bandwidth-limit-scenarios.ipynb` | Derive propagation-based data limits. |
+| `0.3-bandwidth-content.ipynb` | Combine calldata, BALs, access lists, authorization tuples, and blob hashes. |
+| `0.4-state-growth-xatu.ipynb` | Build the scalable Xatu state-creation proxy. |
+| `0.5-state-growth-rpc-calibration.ipynb` | Calibrate state creation against RPC traces. |
+| `0.6-glamsterdam-regular-gas-recalculation.ipynb` | Recalculate Glamsterdam execution gas. |
+| `0.7-glamsterdam-passive-replay.ipynb` | Replay the Glamsterdam/EIP-8037 mechanism. |
+| `0.8-glamsterdam-plus-bandwidth.ipynb` | Replay EIP-8037 with a separate data dimension. |
+| `0.9-full-7999-passive-replay.ipynb` | Replay full three-resource EIP-7999. |
+| `1.0-blob-base-fee-calldata-correlation.ipynb` | Check the historical blob-fee/calldata relationship. |
 
-```text
-execution_state_used = max(execution_gas_used, state_gas_used)
-```
+### Empirical calibration
 
-The shared execution/state base fee uses the normal EIP-1559 linear update with
-denominator 8. EIP-8037 changes the gas-used input, not the update rule.
+| Notebook | Purpose |
+|---|---|
+| `1.1-daily-accounting-panel.ipynb` | Construct the 120-day resource-accounting panel. |
+| `1.2-sampled-block-calibration.ipynb` | Calibrate RPC-only access-list and authorization inputs. |
+| `1.3-bal-size-calibration.ipynb` | Estimate BAL size from scalable Xatu block features. |
+| `1.4-eip7623-calldata-event-study.ipynb` | Measure the EIP-7623 calldata response. |
+| `1.5-gas-limit-data-share-event-study.ipynb` | Estimate resource responses around gas-limit changes. |
+| `1.8-three-way-share-model.ipynb` | Recover independent execution, data, and state elasticities. |
+| `1.10-execution-repricing-calibration.ipynb` | Estimate execution repricing under EIP-8038 and EIP-2780, with EIP-7904 as an additional scenario. |
+| `1.11-bal-state-creation-coupling-calibration.ipynb` | Attribute BAL bytes to execution/state access and direct state creation. |
 
-Bandwidth is reported as a diagnostic in this mechanism, but it does not have a
-separate limit or base fee.
+### Equilibrium and dynamics
 
-### Mechanism A: Glamsterdam + Separate Bandwidth
+| Notebook | Purpose |
+|---|---|
+| `1.9-three-way-equilibrium-model.ipynb` | Solve the Glamsterdam bottleneck-resource equilibrium. |
+| `2.0-full-7999-equilibrium-model.ipynb` | Solve the coupled three-fee EIP-7999 equilibrium. |
+| `2.1-full-7999-driven-replay-scaffold.ipynb` | Initialize and exercise the dynamic replay scaffold. |
 
-This replay lives in `notebooks/0.8-glamsterdam-plus-bandwidth.ipynb`.
+Notebooks `1.6` and `1.7` were intermediate aggregate-demand models. They have
+been superseded by notebooks `1.8` and `1.9` and moved to
+`archived/notebooks/`.
 
-```text
-execution/state:
-  execution_state_used = max(execution_gas_used, state_gas_used)
+## Core Accounting Conventions
 
-bandwidth:
-  bandwidth_bytes = calldata bytes + BAL bytes + tx access-list bytes
-                    + authorization tuple bytes + blob versioned hash bytes
-```
+### Glamsterdam
 
-Bandwidth then gets its own EIP-7999-style target, limit, excess accumulator,
-and fake-exponential base fee. State remains under EIP-8037 for this stage. The
-byte-to-resource-gas mapping is a replay-configuration choice, not part of the
-0.3 bandwidth content table. The bandwidth base fee uses the same blob-anchored
-reserve path as the full EIP-7999 replay. The reserve condition compares the
-bandwidth base fee to `blob_base_fee_per_gas / 12`, but it affects excess
-growth rather than hard-clamping the base fee.
-
-For passive replay, the new bandwidth fee starts from the first block's
-historical aggregate base fee. The notebook derives the corresponding initial
-normalized excess so the fake-exponential path continues from that historical
-price level instead of dropping to `min_base_fee`.
-
-### Full EIP-7999: Execution + Bandwidth + State
-
-This replay lives in `notebooks/0.9-full-7999-passive-replay.ipynb`.
-
-The full EIP-7999 notebook separates all three fee dimensions:
-
-```text
-execution:
-  execution_gas_used
-
-bandwidth:
-  16 * (
-    calldata bytes
-    + BAL bytes
-    + tx access-list bytes
-    + authorization tuple bytes
-    + blob versioned hash bytes
-  )
-
-state:
-  state_gas_8037
-```
-
-Execution and bandwidth have hard per-block limits. State has a target but no
-hard per-block limit in the draft being modeled here, so its normalized excess
-uses the state target as the denominator.
-
-All three dimensions use the normalized EIP-7999 fake-exponential update. The
-notebook keeps the integer base-fee columns seeded at `min_base_fee = 1` and
-also reports fee multipliers so short-window pressure is visible even when the
-integer base fee remains at the minimum.
-
-Bandwidth also uses the EIP-7999 reserve-price anchor against the historical
-blob base fee. With `reserve_factor = 12`, the reserve condition is active when:
+Execution and EIP-8037 state gas share one EIP-1559 fee. The charged quantity
+is the larger of repriced execution gas and state-creation gas:
 
 ```text
-bandwidth_base_fee * 12 < blob_base_fee_per_gas
+glamsterdam_gas_used = max(repriced_execution_gas, state_creation_gas_8037)
 ```
 
-The reserve path changes the bandwidth excess-gas update; it is not a hard
-`max(base_fee, blob / 12)` clamp. The full-7999 notebook therefore joins
-historical `blob_base_fee_per_gas` from the blob-fee sample before replaying
-bandwidth, and reports `ceil(blob_base_fee_per_gas / 12)` only as a diagnostic
-anchor threshold.
+The current execution calibration includes EIP-8038 and EIP-2780. EIP-7904 is
+kept as a separate scenario because its inclusion is less certain.
 
-The separated execution, bandwidth, and state fee dimensions are warm-started
-from the first block's historical aggregate base fee. For each fake-exponential
-resource, the notebook derives the initial normalized excess that corresponds to
-that base fee, then lets each dimension drift independently.
+### Full EIP-7999
 
-## Data Pipeline
-
-### Bandwidth Inputs
-
-Bandwidth content is built from Xatu plus RPC:
-
-- Xatu supplies calldata bytes.
-- Xatu `execution_transaction` supplies zero/nonzero calldata byte counts for
-  calldata gas.
-- RPC `debug_traceBlockByNumber` with `prestateTracer` supplies BAL RLP bytes.
-- RPC full transaction objects supply EIP-2930/EIP-7981 transaction access-list
-  address and storage-key counts.
-- RPC transaction fetches supply EIP-7702 authorization lists.
-- Xatu transaction fields supply blob versioned hash counts.
-
-The main bandwidth output is produced by
-`notebooks/0.3-bandwidth-content.ipynb`:
+The full mechanism separates three quantities:
 
 ```text
-bandwidth_payload_bytes =
-  calldata_bytes
-  + bal_rlp_bytes
-  + tx_access_list_bytes
-  + authorization_tuple_rlp_bytes
-  + blob_versioned_hash_bytes
+execution gas = repriced execution activity
 
-bandwidth_metered_bytes =
-  calldata_bytes
-  + bal_rlp_bytes
-  + tx_access_list_bytes
-  + authorization_tuple_8131_bytes
-  + blob_versioned_hash_bytes
+data gas = 16 * (
+  calldata bytes
+  + transaction access-list bytes
+  + authorization-tuple bytes
+  + blob-versioned-hash bytes
+  + BAL bytes
+)
+
+state gas = EIP-8037 persistent-state creation gas
 ```
 
-The 0.3 notebook deliberately keeps this as byte accounting only. Later replay
-mechanisms can decide how to map these bytes into resource gas. Keep the labels
-straight:
+Static transaction data and BAL data do not share the same demand equation.
+Static data uses the empirically estimated data-price elasticity. BALs are
+derived from their parent execution/state activity, with the directly
+state-creation-linked share calibrated in notebook `1.11`.
 
-- Current EIP-7999 calldata resource gas uses the old calldata rule:
-  `4 * zero_calldata_bytes + 16 * nonzero_calldata_bytes`.
-- The 64 gas/byte number is a floor-accounting rate from EIP-7976, EIP-7981,
-  EIP-8131, and EIP-8279-style proposals. It is not automatically the unit of
-  an EIP-7999 bandwidth resource.
-- BAL bytes under EIP-7928 do not have a direct `16 gas/byte` price in
-  Glamsterdam. They are constrained indirectly by execution gas and BAL item
-  rules. If a later replay maps BAL bytes to `16 gas/byte`, that is a candidate
-  bandwidth-resource convention rather than a 0.3 content-table output.
-- Authorization tuples and blob versioned hashes are included in the broadened
-  bandwidth content table because they are transaction-content bytes. The
-  notebook keeps byte counts only, not EIP-8131-style gas columns.
+## Data Sources
 
-For transaction access lists, `tx_access_list_bytes` follows EIP-7981:
-`20 * address_entries + 32 * storage_keys`.
-For authorization tuples, the notebook keeps both actual RLP bytes and the
-EIP-8131 fixed-size byte count.
+- Xatu/CBT supplies scalable block and transaction measurements.
+- RPC traces are used only where Xatu does not expose the required information,
+  particularly exact BAL RLP construction and selected state-creation checks.
+- Expensive RPC results are cached under `data/` and reused by later notebooks.
 
-### State-Growth Inputs
-
-State-growth inputs are built in two steps:
-
-- `notebooks/0.4-state-growth-xatu.ipynb` pulls scalable Xatu/CBT estimates for
-  storage-slot creation, account creation, and code bytes.
-- `notebooks/0.5-state-growth-rpc-calibration.ipynb` calibrates the Xatu
-  estimator against RPC/prestate traces and adds EIP-7702 delegation indicators.
-
-The replay input is:
-
-```text
-state_gas_8037 =
-  new_storage_slots * 64 * CPSB
-  + new_accounts * 120 * CPSB
-  + code_bytes * CPSB
-  + new_delegation_indicators * 23 * CPSB
-```
-
-For the current EIP-8037 profile, `CPSB = 1530`.
-
-## Notebook Sequence
-
-```text
-notebooks/
-  0.1-rpc-bal-rlp.ipynb
-    BAL RLP bytes from RPC/prestate traces
-
-  0.2-bandwidth-limit-scenarios.ipynb
-    propagation caps and Glamsterdam worst-case bandwidth limits
-
-  0.3-bandwidth-content.ipynb
-    calldata + BAL + access-list + authorization-list + blob-hash bandwidth table
-
-  0.4-state-growth-xatu.ipynb
-    scalable Xatu state-growth estimator
-
-  0.5-state-growth-rpc-calibration.ipynb
-    RPC calibration for accounts and delegation indicators
-
-  0.6-glamsterdam-regular-gas-recalculation.ipynb
-    transaction-level EIP-7976/EIP-7981 regular-gas recalculation
-
-  0.7-glamsterdam-passive-replay.ipynb
-    Glamsterdam/EIP-8037 passive replay
-
-  0.8-glamsterdam-plus-bandwidth.ipynb
-    Mechanism A: EIP-8037 plus separated bandwidth
-
-  0.9-full-7999-passive-replay.ipynb
-    full EIP-7999: execution, bandwidth, and state as separated resources
-
-  1.0-blob-base-fee-calldata-correlation.ipynb
-    blob base fee vs calldata bytes/gas correlation check
-```
-
-Older smoke-test notebooks for Xatu credentials and standalone calldata gas
-validation are in `archived/`.
+`data/` and most of `plots/` are generated local artifacts and are ignored by
+Git. Figures embedded by canonical reports are explicitly retained. The active
+`plots/` directory contains only figures generated by the current empirical,
+equilibrium, and dynamic notebooks. Older figures are retained locally in
+`archived/plots/`; the two figures embedded by an archived report are also
+retained by Git.
 
 ## Repository Layout
 
 ```text
-configs/
-  synthetic_bandwidth_only.yaml
-
-data/
-  generated CSV/RLP artifacts
-
-markdowns/
-  project notes and reports
-
-plots/
-  generated PNG plots
-
 archived/
-  older exploratory notebooks and helpers
+  markdowns/   superseded reports and working notes
+  notebooks/   superseded and exploratory notebooks
+  plots/       older generated figures
+  src/         retired helper code
+  tests/       retired tests
 
-src/
-  bandwidth_limits/
-    bandwidth propagation limit and worst-case payload analysis
-
-  basefee/
-    EIP-1559 and EIP-7999-style base-fee helpers
-
-  mechanisms/
-    passive replay mechanisms
-
-  resources/
-    shared resource accounting types and helpers
-
-  sim/
-    Xatu/RPC data pulls, BAL construction, synthetic/replay helpers
-
-  state_limits/
-    state growth target/limit derivation helpers
+configs/       replay and simulation configuration
+data/          cached input and generated CSV files
+markdowns/     canonical reports and modeling plan
+notebooks/     active research workflow
+plots/         current generated figures
+src/           reusable accounting, demand, mechanism, and simulation code
+tests/         tests for active source modules
 ```
 
-## Quick Start
+## Reproducing the Analysis
 
-Install dependencies:
+Install the dependencies:
 
 ```bash
 python3 -m pip install -r requirements.txt
 ```
 
-Run the current passive EIP-8037 replay tests:
+Run the test suite:
 
 ```bash
-PYTHONPATH=src python -m pytest \
-  tests/test_basefee_eip1559.py \
-  tests/test_mechanism_glamsterdam_only.py
+PYTHONPATH=src python3 -m pytest
 ```
 
-Open notebooks in order when rebuilding the 500-block sample:
-
-```bash
-jupyter notebook notebooks/0.1-rpc-bal-rlp.ipynb
-jupyter notebook notebooks/0.2-bandwidth-limit-scenarios.ipynb
-jupyter notebook notebooks/0.3-bandwidth-content.ipynb
-jupyter notebook notebooks/0.4-state-growth-xatu.ipynb
-jupyter notebook notebooks/0.5-state-growth-rpc-calibration.ipynb
-jupyter notebook notebooks/0.6-glamsterdam-regular-gas-recalculation.ipynb
-jupyter notebook notebooks/0.7-glamsterdam-passive-replay.ipynb
-jupyter notebook notebooks/0.8-glamsterdam-plus-bandwidth.ipynb
-jupyter notebook notebooks/0.9-full-7999-passive-replay.ipynb
-jupyter notebook notebooks/1.0-blob-base-fee-calldata-correlation.ipynb
-```
-
-## Local Configuration
-
-Some notebooks need private data-service or RPC credentials. Keep those in a
-local `.env` file and do not commit real credentials to notebooks, YAML,
-markdown, or git history.
-
-## Important Modeling Notes
-
-- The CBT `gas_state_growth` field is useful as a diagnostic, but it is too
-  broad to subtract from execution gas for EIP-8037 replay because it includes
-  non-creation state/access activity.
-- For Glamsterdam-only replay, regular gas should come from the transaction-level
-  0.6 recalculation: receipt gas after historical state-creation de-accounting,
-  plus the EIP-7976 calldata floor branch and EIP-7981 access-list data
-  surcharge where they bind.
-- In the passive replay, over-limit historical blocks are flagged as invalid
-  diagnostics. Their base-fee update is capped at the 60M block limit, matching
-  how a valid full block would update by at most 12.5%.
-- In full EIP-7999 replay, execution and bandwidth over-limit blocks are flagged
-  as invalid diagnostics. State usage above its 75M target is valid and updates
-  the state excess without a per-block cap.
-- In full EIP-7999 replay, bandwidth uses the blob-base-fee reserve path. The
-  diagnostic threshold is `ceil(blob_base_fee_per_gas / 12)`, but the charged
-  base fee remains the pure `fake_exponential(excess)` value.
-- Synthetic notebooks and older Xatu-only BAL experiments are archived as
-  context. The current realized-block pipeline uses Xatu for calldata and RPC
-  for BAL/state calibration where Xatu lacks the necessary trace detail.
+Most empirical notebooks can be rerun from cached CSV files. Notebooks that
+refresh Xatu or RPC inputs require credentials in a local `.env` file. Do not
+commit credentials or replace cached samples unintentionally.
