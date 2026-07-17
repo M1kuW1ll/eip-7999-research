@@ -115,10 +115,14 @@ def query_xatu_transaction_gas_inputs(
         )
     if not expected_counts.empty:
         coverage = expected_counts.merge(raw_count, on="block_number", how="left")
-        coverage["raw_tx_count"] = pd.to_numeric(
-            coverage["raw_tx_count"],
-            errors="coerce",
-        ).fillna(0).astype("int64")
+        coverage["raw_tx_count"] = (
+            pd.to_numeric(
+                coverage["raw_tx_count"],
+                errors="coerce",
+            )
+            .fillna(0)
+            .astype("int64")
+        )
         coverage["expected_tx_count"] = pd.to_numeric(
             coverage["expected_tx_count"],
             errors="coerce",
@@ -374,8 +378,7 @@ def query_xatu_tx_state_creation(
             count() AS new_accounts
         FROM candidates
         INNER JOIN first_appearances USING address
-        WHERE first_appearances.first_block BETWEEN {start_block:UInt64}
-            AND {end_block:UInt64}
+        WHERE first_appearances.first_block = candidate_block
         GROUP BY block_number, tx_index, tx_hash
         """,
         parameters=params,

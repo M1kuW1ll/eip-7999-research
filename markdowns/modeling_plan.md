@@ -16,7 +16,7 @@ The first full-7999 scaffold is now implemented in [src/dynamics](../src/dynamic
 - stationary-path summaries after a configurable burn-in; and
 - deterministic checks for the notebook-2.0 warm starts and elasticity-off equivalence with passive replay.
 
-The notebook's correlated block shocks are a controlled mechanics test, not an empirical volatility result. A longer contiguous block panel remains the main data requirement.
+The notebook's correlated block shocks are a controlled mechanics test, not an empirical volatility result. A longer contiguous block panel remains the main data requirement. Notebook 2.0 already uses the induced runtime-BAL equation specified below, but notebook 2.1 still treats total metered data as one isoelastic demand curve. The dynamic replay is therefore a mechanism and warm-start scaffold until the static-data/BAL decomposition is wired into its demand driver.
 
 ## 0. The three resources and two conventions
 
@@ -48,19 +48,27 @@ D_{\mathrm{total}}(p_D)
 =D_{\mathrm{static},0}
 \left(\frac{p_D}{p_D^0}\right)^{-\epsilon_{\mathrm{static}}}
 +B_0\left[
-(1-w_S)\frac{A^*}{A_0}
-+w_S\frac{S^*}{S_0}
-\right]
-\left(\frac{p_D}{p_D^0}\right)^{-\gamma_{\mathrm{BAL}}}.
+w_{\mathrm{state}}\frac{S^*}{S_0}
++w_{\mathrm{execution}}\frac{A^*}{A_0}
+\right],
 $$
 
-Here $A$ is state-access activity and $S$ is persistent state creation. Notebook 1.11 estimates that $w_S=0.1328$ of BAL bytes are directly linked to newly created storage slots, accounts, and code; the remaining 0.8672 stays with state-access activity. Because no independent historical access-price curve is available, notebook 2.0 uses the physical execution quantity $E^*=T_E/m_E$ as the reduced-form proxy for $A^*$. The central case sets $\gamma_{\mathrm{BAL}}=0$: BAL gas scales with its parent quantities but is not assigned the static-data elasticity. Notebook 2.0 solves the coupled data condition numerically and converts each continuous solution to the nearest fee represented by the integer fake exponential. The replay must initialize from that represented protocol fee, not from a rounded continuous fee paired with unrelated excess gas. `make_full_7999_config` performs the inverse fake-exponential warm start.
+where $A$ is existing-state access activity. Notebook 1.11 estimates $w_{\mathrm{state}}=0.113932$ and $w_{\mathrm{execution}}=0.886068$ from the full 6,000-block transaction attribution. Because an independently priced access index is not yet available, the aggregate model uses
+
+$$
+\frac{A_t}{A_0}\approx\left(\frac{E_t}{E_0}\right)^{\rho_A},
+\qquad \rho_A=1.
+$$
+
+Total execution is a reduced-form proxy for access activity; the execution-linked BAL component is not empirically shown to follow execution demand. The suffix identifies the proxy used in the model rather than a mechanical cause for every byte. The model also sets $\gamma_{\mathrm{BAL}}=0$, so BAL has no additional direct response to the data fee after its parent activities are determined. Notebook 2.0 converts each continuous solution to the nearest fee represented by the integer fake exponential. The replay must initialize from that represented protocol fee, not from a rounded continuous fee paired with unrelated excess gas. `make_full_7999_config` performs the inverse fake-exponential warm start.
+
+Notebook 2.0 fixes the data limit at 90M, varies its target from one sixth through one half of the limit, and sweeps execution limits from 250M through 600M with targets at half the limit. Its central capacity path preserves the observed full-7999 metered data/execution ratio, $\kappa_0=0.109795$, by setting $T_E=T_D/\kappa_0$. The full Cartesian grid is retained as an imbalance stress test. Every solution is also checked against the one-wei protocol minimum; a continuous fee below one wei means the target cannot be cleared under the mechanism even if the algebraic isoelastic solution exists.
 
 The unconstrained equilibrium intentionally omits the data reserve. That is appropriate for initialization. With the reserve enabled, the dynamic path may settle away from the unconstrained target-clearing fee; this is a result rather than a validation failure. Notebook 2.1 therefore compares both the unconstrained data-fee start and a start at the contemporaneous blob-fee/12 threshold.
 
 ### 1.2 Demand, shocks, and transaction coupling
 
-The central benchmark uses the independently recovered elasticities for execution, static data, and persistent state creation. BAL gas is then generated from the parent activity rather than shocked or price-scaled as if it were independently demanded:
+The intended central benchmark uses the independently recovered elasticities for execution, static data, and persistent state creation. BAL gas is then generated from the parent activity rather than shocked or price-scaled as if it were independently demanded:
 
 $$
 Q_{i,t}^{\mathrm{offered}}
@@ -69,17 +77,18 @@ g_i^0\left(\frac{p_{i,t}}{p_i^0}\right)^{-\epsilon_i}s_{i,t},
 \qquad E[s_{i,t}]\approx 1.
 $$
 
-In the first reduced-form implementation,
+In the equilibrium implementation and intended replay specification,
 
 $$
 B_t=B_0\left[
-(1-w_S)\frac{A_t}{A_0}
-+w_S\frac{S_t}{S_0}
-\right]
-\left(\frac{p_{D,t}}{p_D^0}\right)^{-\gamma_{\mathrm{BAL}}}.
+w_{\mathrm{state}}
+\frac{S_t}{S_0}
++w_{\mathrm{execution}}
+\frac{A_t}{A_0}
+\right].
 $$
 
-The full 120-day accounting gives $B_0/E_0=0.08846$ BAL gas per historical regular-execution gas. Notebook 1.11 then finds that only $w_S=0.1328$ is directly linked to state creation; reads and existing-state changes remain in $A_t$. The 2,000-block trace sample also shows that read-only slots are 58.4% of unique read-or-written storage slots, so persistent state-growth gas cannot replace the access driver. Until an explicit access index is available, the implementation proxies $A_t/A_0$ with $E_t/E_0$.
+The priced EIP-8279 runtime anchor gives $B_0/E_0=0.080155$ BAL gas per historical execution gas, equivalent to about 5.01 kB of runtime-metered BAL content per million historical execution gas. The same 6,000-block panel estimates the 0.113932 state-linked weight and 0.886068 execution-linked weight. Until an explicit access index is available, the implementation uses $(E_t/E_0)^{\rho_A}$ with $\rho_A=1$ centrally.
 
 The shock vector is resampled jointly, and bootstrap chunks are contiguous. This preserves contemporaneous execution/data/state co-movement and short-run persistence. It does **not** create counterfactual transaction coupling. A transaction consuming several resources should respond to several fees; that enters separately through the elasticity-matrix demand sensitivity in [src/dynamics/demand.py](../src/dynamics/demand.py). Capacity coupling is also separate: the fixed-bundle inclusion sensitivity scales the resource vector together when one hard limit binds.
 
@@ -147,14 +156,14 @@ Split into "estimate from data," "bound by sensitivity," and "configure from the
 - **Independent elasticities `eps_execution`, `eps_data`, and `eps_state`**: recovered in notebook 1.8. Use the 35-day estimates centrally and sweep the 21-, 60-, and 75-day windows.
 - **Shock process**: the price-neutral baseline, the shock distribution, and the **bootstrap window length** that reproduces historical autocorrelation and cross-resource correlation. Fit these choices to the price-adjusted shock observations.
 - **Static bandwidth metering**: the byte→resource-gas mapping (candidate `16 gas/byte`) for calldata, access lists, authorization tuples, and blob hashes.
-- **BAL technological coefficient**: the full-range pooled ratio $B_0/E_0=0.08846$ BAL gas per historical regular-execution gas, equivalent to about 5.53 kB of BAL payload per million execution gas.
-- **Direct state-creation-linked BAL weight**: notebook 1.11 maps exact BAL component counts over 2,000 sampled blocks across 120 days. The strict and extended direct-entry estimates are 0.1301 and 0.1354, with their midpoint 0.1328 used centrally.
+- **BAL technological coefficient**: the direct 6,000-block EIP-8279 runtime anchor gives $B_0/E_0=0.080155$ BAL gas per historical execution gas, equivalent to about 5.01 kB of runtime-metered BAL content per million execution gas.
+- **Runtime BAL decomposition**: notebook 1.11 uses the full 6,000-block transaction attribution to estimate a 0.113932 state-linked runtime weight and a 0.886068 execution-linked runtime weight.
 
-**Bounded by sensitivity, not estimated**
+**Central reduced-form assumptions**
 
-- **BAL-bandwidth price response**: this channel never varied independently in historical data, so it is swept over a plausible range rather than point-estimated. Report metrics across the range.
-- **State-access quantity proxy**: total execution quantity is used temporarily for $A_t$. This is broader than state access and should be replaced by an explicit access index before interpreting the coupling structurally.
-- **Cross-price complementarity and substitution terms** not separately identified by the gas-limit events.
+- **BAL-bandwidth price response $\gamma_{\mathrm{BAL}}=0$**: BAL changes through parent access and state-creation activity rather than an additional direct data-price response.
+- **State-access quantity proxy $\rho_A=1$**: total execution quantity is used temporarily as the access proxy, with constant access intensity as execution scales. This is broader than state access and should be replaced by an explicit access index before interpreting the coupling structurally.
+- **Cross-price complementarity and substitution terms** remain outside the aggregate model because the gas-limit events do not identify them separately.
 
 **Configured from the EIPs (kept as inputs so the analysis reruns)**
 

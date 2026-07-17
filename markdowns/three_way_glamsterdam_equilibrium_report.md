@@ -244,7 +244,8 @@ The central accounting uses $m_{\mathrm{execution}}=1.538$, $m_{\mathrm{data}}=1
 The 200M, 250M, and 300M calculations extrapolate progressively farther from the anchor and are consequently more sensitive to the recovered state elasticity.
 
 ![Glamsterdam equilibrium fees and state share across gas limits](../plots/three_way_equilibrium_gas_limit_curves_2026-02-01_2026-06-01.png)
-> The blue band spans the 21-, 35-, and 60-day independent calibrations. The green line is the state-excluded EIP-7623 softmax sensitivity.
+
+> The left panel reports the equilibrium shared base fee on a log scale; the blue points use the central 35-day independent elasticities, the blue band spans the 21-, 35-, and 60-day calibrations, and the green line is the state-excluded EIP-7623 softmax sensitivity. The right panel shows that the physical state share rises as capacity expands, consistent with the equilibrium switching from the regular-gas branch at 60M and 100M to the state branch from 150M onward.
 
 
 ## Which branch determines the equilibrium
