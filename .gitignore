@@ -33,6 +33,7 @@ markdowns/demand_model_plan.md
 !/plots/execution_repricing_8038_2780_2026-02-01_2026-06-01.png
 !/plots/full_7999_equilibrium_capacity_grid_2026-02-01_2026-06-01.png
 !/plots/full_7999_equilibrium_window_sensitivity_2026-02-01_2026-06-01.png
+!/plots/full_7999_data_equilibrium_boundary_2026-02-01_2026-06-01.png
 
 # Archived plots remain generated artifacts except where an archived report
 # still embeds the figure.

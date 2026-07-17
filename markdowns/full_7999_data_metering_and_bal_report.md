@@ -8,11 +8,12 @@ The fee model uses the transaction-local runtime byte counter specified by [EIP-
 The main results are:
 
 1. The EIP-8279 runtime-meter anchor is **119,944 bytes per block**, or **1.919100 million data gas per block** at 16 data gas per runtime byte.
-2. Both the runtime counter and its state/execution attribution are reconstructed transaction by transaction for all **6,000 sampled blocks**. The transaction sums exactly match the independent block-level runtime reconstruction on every block.
-3. In the same EIP-8279 runtime units, **11.393%** of metered BAL bytes are matched to persistent state creation. The remaining **88.607%** is execution-linked in the demand model because total execution is used as a proxy for existing-state access activity.
-4. The execution-linked label does not mean that execution gas mechanically causes every remaining BAL byte. It identifies the component modeled with the execution proxy, under the assumption that access intensity remains constant as execution scales.
-5. The central model sets $\gamma_{\mathrm{BAL}}=0$: BAL changes through state-creation and access activity, without an additional direct response to the data fee.
-6. Static-data accounting, including calldata, transaction access lists, authorization tuples, and blob-versioned hashes, is **2.123622 million data gas per block**, giving a metering multiplier of **1.798834** relative to current EIP-7623 data gas.
+2. On the **1,200 blocks** with both measurements, final BAL RLP averages **134,087 bytes** and the runtime counter averages **121,006 bytes**. The capacity adjustment is their difference: **13,080 bytes (0.0131 MB) per block**.
+3. Both the runtime counter and its state/execution attribution are reconstructed transaction by transaction for all **6,000 sampled blocks**. The transaction sums exactly match the independent block-level runtime reconstruction on every block.
+4. In the same EIP-8279 runtime units, **11.393%** of metered BAL bytes are matched to persistent state creation. The remaining **88.607%** is execution-linked in the demand model because total execution is used as a proxy for existing-state access activity.
+5. The execution-linked label does not mean that execution gas mechanically causes every remaining BAL byte. It identifies the component modeled with the execution proxy, under the assumption that access intensity remains constant as execution scales.
+6. The central model sets $\gamma_{\mathrm{BAL}}=0$: BAL changes through state-creation and access activity, without an additional direct response to the data fee.
+7. Static-data accounting, including calldata, transaction access lists, authorization tuples, and blob-versioned hashes, is **2.123622 million data gas per block**, giving a metering multiplier of **1.798834** relative to current EIP-7623 data gas.
 
 ## Estimating EIP-8279 runtime-metered BAL bytes
 
@@ -53,6 +54,34 @@ Daily sample means are weighted by the actual number of canonical blocks in each
 Xatu records cold accesses and value-bearing calls even when the surrounding call later reverts, so those EIP-8279 bytes are included. Storage writes are different: Xatu's storage-diff table contains only changes that remain after the transaction finishes. If a reverted call temporarily changes a storage value, EIP-8279 retains the 32-byte meter charge, but Xatu contains no final storage diff from which to recover it. The reconstruction therefore misses these specific reverted storage-value charges and may slightly understate the runtime counter.
 
 EIP-8279 itself uses the runtime counter in a 64-gas-per-byte transaction floor. This report borrows the byte counter for the broader EIP-7999 scenario and applies the scenario's assumed 16 data gas per byte. The EIP-8279 static 51-byte allowance per authorization and automatic entries covered by transaction-base headroom are not part of `bal_data_bytes`; they are not included in the runtime anchor.
+
+## Runtime-metered BAL versus final BAL RLP size
+
+The fee model uses the EIP-8279 runtime counter, whereas block propagation carries the final BAL RLP object. We compare the two on the same 1,200 deterministic blocks with exact BAL RLP measurements. Physical BAL RLP appears only in this capacity diagnostic; it does not replace runtime-metered BAL in the demand model.
+
+| Matched-sample quantity | Mean per block |
+|---|---:|
+| EIP-8279 runtime-metered BAL | 121,006 bytes |
+| Final BAL RLP | 134,087 bytes |
+| Final BAL RLP minus runtime-metered BAL | **13,080 bytes (0.0131 MB)** |
+
+Across the matched blocks, final BAL RLP bytes are **1.1081 times** runtime-metered BAL bytes. The capacity calculation does not scale every data component by this ratio. It only replaces the runtime BAL quantity already included in metered data with final BAL RLP:
+
+$$
+D_{\mathrm{BAL\ adjusted}}
+=D_{\mathrm{metered}}-B_{\mathrm{runtime}}+B_{\mathrm{RLP}}.
+$$
+
+A 90M data-gas limit corresponds to:
+
+$$
+\frac{90{,}000{,}000}{16}
+=5{,}625{,}000
+$$
+
+metered-byte units. Using the matched-sample BAL quantity, the adjustment adds only the **0.0131 MB difference**, giving approximately **5.638 MB** of BAL-adjusted content. Adding the complete 0.1341 MB BAL RLP to 5.625 MB would double-count the 0.1210 MB runtime BAL already present in the metered total.
+
+This is not a hard physical block-size or propagation bound. The BAL adjustment at another operating point depends on its runtime BAL quantity, and the calculation still excludes complete transaction envelopes and other protocol framing.
 
 ## Separating state-linked and execution-linked BAL
 
@@ -243,6 +272,7 @@ The static-data model uses one historical elasticity for calldata, access-list c
 - [Two-way runtime decomposition](../data/bal_runtime_8279_two_way_decomposition_2026-02-01_2026-06-01.csv)
 - [Runtime component attribution](../data/bal_runtime_8279_component_attribution_2026-02-01_2026-06-01.csv)
 - [BAL-weighted cost exposure](../data/bal_runtime_8279_composite_cost_exposure_2026-02-01_2026-06-01.csv)
+- [Runtime-meter versus final-BAL-RLP comparison](../data/bal_runtime_8279_physical_comparison_2026-02-01_2026-06-01.csv)
 - [EIP-8279 runtime parameter card](../data/bal_runtime_8279_parameter_card_2026-02-01_2026-06-01.csv)
 - [Static-data metering bridge](../data/full_7999_data_metering_bridge_2026-02-01_2026-06-01.csv)
 
