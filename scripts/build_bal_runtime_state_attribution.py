@@ -1,9 +1,9 @@
-"""Build the 6,000-block EIP-8279 state/execution BAL attribution cache.
+"""Build the 6,000-block EIP-8279 BAL attribution cache.
 
-The script reuses the existing 1,200-block transaction cache and queries Xatu
-for the remaining sampled blocks in bounded chunks. Only block-level
-attribution is persisted for the wider panel, which avoids a second very large
-transaction cache while preserving the component sums needed by notebook 1.11.
+The transaction-level reconstruction is queried in bounded chunks and reduced
+to block aggregates.  The compact output preserves the direct-state,
+co-produced, and non-state decomposition by runtime-meter component, complete
+transaction counts, and the cost-weighted diagnostic used by notebook 1.11.
 """
 
 from __future__ import annotations
@@ -25,10 +25,14 @@ if str(ROOT / "src") not in sys.path:
 from sim.xatu_bal_8279 import (  # noqa: E402
     aggregate_state_execution_runtime_blocks,
     attribute_direct_state_runtime_bytes,
+    attach_normalized_composite_costs,
     attach_state_bundle,
     query_xatu_eip8279_runtime_meter,
 )
-from sim.xatu_glamsterdam import query_xatu_tx_state_creation  # noqa: E402
+from sim.xatu_glamsterdam import (  # noqa: E402
+    query_xatu_transaction_gas_inputs,
+    query_xatu_tx_state_creation,
+)
 
 
 START_DATE = "2026-02-01"
@@ -36,11 +40,6 @@ END_DATE = "2026-06-01"
 DATE_TAG = f"{START_DATE}_{END_DATE}"
 BLOCK_INPUT = (
     ROOT / "data" / f"calibration_xatu_bal_runtime_8279_blocks_{DATE_TAG}.csv"
-)
-TX_CACHE = (
-    ROOT
-    / "data"
-    / f"calibration_xatu_bal_runtime_8279_transactions_{DATE_TAG}.csv"
 )
 OUTPUT = (
     ROOT
@@ -63,10 +62,54 @@ def _client():
     )
 
 
-def _aggregate_cached_transactions(path: Path) -> pd.DataFrame:
-    cached = pd.read_csv(path)
-    attributed = attribute_direct_state_runtime_bytes(cached)
-    return aggregate_state_execution_runtime_blocks(attributed)
+def _aggregate_chunk(runtime, state, gas) -> pd.DataFrame:
+    attributed = attribute_direct_state_runtime_bytes(
+        attach_state_bundle(runtime, state)
+    )
+    cost = attach_normalized_composite_costs(attributed, gas)
+    block = aggregate_state_execution_runtime_blocks(attributed)
+
+    transaction_counts = (
+        gas.groupby("block_number", as_index=False)
+        .size()
+        .rename(columns={"size": "transactions"})
+    )
+    state_counts = (
+        state.loc[state["historical_state_creation_gas"].gt(0)]
+        .groupby("block_number", as_index=False)
+        .size()
+        .rename(columns={"size": "state_transactions"})
+    )
+    transaction_counts = transaction_counts.merge(
+        state_counts, on="block_number", how="left", validate="one_to_one"
+    )
+    transaction_counts["state_transactions"] = (
+        transaction_counts["state_transactions"].fillna(0).astype("int64")
+    )
+    transaction_counts["nonstate_transactions"] = (
+        transaction_counts["transactions"]
+        - transaction_counts["state_transactions"]
+    )
+
+    weighted_columns = []
+    for resource in ["execution", "data", "state"]:
+        runtime_column = f"runtime_x_{resource}_cost_share"
+        coproduced_column = f"coproduced_x_{resource}_cost_share"
+        cost[runtime_column] = (
+            cost["bal_runtime_bytes_8279"]
+            * cost[f"{resource}_composite_cost_share"]
+        )
+        cost[coproduced_column] = (
+            cost["bal_runtime_bytes_coproduced_state_txs_8279"]
+            * cost[f"{resource}_composite_cost_share"]
+        )
+        weighted_columns.extend([runtime_column, coproduced_column])
+    weighted = cost.groupby("block_number", as_index=False)[weighted_columns].sum()
+
+    return (
+        block.merge(transaction_counts, on="block_number", how="outer")
+        .merge(weighted, on="block_number", how="outer")
+    )
 
 
 def main() -> None:
@@ -80,35 +123,30 @@ def main() -> None:
     runtime_blocks = pd.read_csv(BLOCK_INPUT)
     if runtime_blocks["block_number"].duplicated().any():
         raise ValueError("Block input contains duplicate block numbers")
-    cached_blocks = _aggregate_cached_transactions(TX_CACHE)
     partial_blocks = pd.DataFrame()
     if PARTIAL_OUTPUT.exists():
         partial_blocks = pd.read_csv(PARTIAL_OUTPUT)
-        cached_blocks = pd.concat(
-            [cached_blocks, partial_blocks], ignore_index=True
-        )
-        cached_blocks = cached_blocks.drop_duplicates("block_number", keep="last")
-    cached_numbers = set(cached_blocks["block_number"].astype(int))
+    cached_numbers = set(partial_blocks.get("block_number", pd.Series(dtype=int)).astype(int))
     requested = runtime_blocks["block_number"].astype(int).tolist()
     missing = [block for block in requested if block not in cached_numbers]
 
     print(
-        f"Using {len(cached_blocks):,} cached blocks; querying {len(missing):,} "
+        f"Using {len(partial_blocks):,} completed blocks; querying {len(missing):,} "
         f"blocks in chunks of {args.chunk_size:,}.",
         flush=True,
     )
     client = _client()
-    pieces = [cached_blocks]
+    pieces = [partial_blocks]
     for start in range(0, len(missing), args.chunk_size):
         chunk = missing[start : start + args.chunk_size]
         runtime = query_xatu_eip8279_runtime_meter(
             client, chunk, network=args.network
         )
         state = query_xatu_tx_state_creation(client, chunk, network=args.network)
-        attributed = attribute_direct_state_runtime_bytes(
-            attach_state_bundle(runtime, state)
+        gas = query_xatu_transaction_gas_inputs(
+            client, chunk, network=args.network
         )
-        block = aggregate_state_execution_runtime_blocks(attributed)
+        block = _aggregate_chunk(runtime, state, gas)
 
         expected = pd.DataFrame({"block_number": chunk}).merge(
             block, on="block_number", how="left", validate="one_to_one"
@@ -116,11 +154,17 @@ def main() -> None:
         value_columns = [
             column for column in expected.columns if column != "block_number"
         ]
-        expected[value_columns] = expected[value_columns].fillna(0).astype("int64")
+        expected[value_columns] = expected[value_columns].fillna(0)
+        integer_columns = [
+            column
+            for column in value_columns
+            if not column.startswith(("runtime_x_", "coproduced_x_"))
+        ]
+        expected[integer_columns] = expected[integer_columns].astype("int64")
         pieces.append(expected)
-        checkpoint = pd.concat(
-            [partial_blocks, *pieces[1:]], ignore_index=True
-        ).drop_duplicates("block_number", keep="last")
+        checkpoint = pd.concat(pieces, ignore_index=True).drop_duplicates(
+            "block_number", keep="last"
+        )
         checkpoint.to_csv(PARTIAL_OUTPUT, index=False)
         print(
             f"Completed {min(start + len(chunk), len(missing)):,}/"
@@ -153,6 +197,10 @@ def main() -> None:
         + combined["bal_runtime_bytes_execution_8279"]
     ).equals(combined["bal_runtime_bytes_8279"]):
         raise ValueError("Final state/execution attribution does not reconcile")
+    if not (
+        combined["state_transactions"] + combined["nonstate_transactions"]
+    ).equals(combined["transactions"]):
+        raise ValueError("State/non-state transaction counts do not reconcile")
 
     combined.to_csv(OUTPUT, index=False)
     if PARTIAL_OUTPUT.exists():

@@ -16,8 +16,12 @@ We use daily Ethereum mainnet observations from January 2025 through May 2026. G
 
 3. State demand is the most price-responsive in both clean events. Data demand is more price-responsive than execution demand under the independent specification.
 4. The clean events also show stable relative quantity responses: $\Delta_{\mathrm{data}} \approx 0.108$ and $\Delta_{\mathrm{state}} \approx 0.214$. These measure how data and state quantities change relative to execution when the common base fee moves.
-5. The aggregate-plus-softmax model remains useful as a sensitivity check, but it needs an additional assumption that the common-price events cannot determine. Its EIP-7623 calibration should be read as a high-response case, not the preferred estimate.
-6. Only two events support the headline calibration, and their execution responses differ substantially. The vector above is therefore a central calibration for simulation, not a precise statistical estimate.
+5. The aggregate-plus-softmax model remains useful as a sensitivity check and requires an
+   additional assumption that the common-price events cannot determine. Its EIP-7623 calibration
+   represents a high-response case. The independent isoelastic estimate remains central.
+6. Two events support the headline calibration, and their execution responses differ
+   substantially. We therefore use the vector above as a central simulation input with explicit
+   event-window sensitivity.
 
 ## Central model: three independent isoelastic demands
 
@@ -37,7 +41,11 @@ s_i=\frac{q_i}{Q},
 \sum_i s_i=1.
 $$
 
-Here $q_i$ is resource $i$'s gas-equivalent quantity per block. The current-rule accounting divides scalar block gas into mutually exclusive execution, data, and state components, so these shares add to one. A superscript zero denotes the pre-event anchor: $q_i^0$, $Q^0$, and $s_i^0=q_i^0/Q^0$.
+Here $q_i$ is resource $i$'s gas-equivalent quantity per block. The current-rule accounting divides
+scalar block gas into mutually exclusive execution, data, and state components, so these shares add
+to one. The elasticity recovery uses the last clean 45M regime as its share anchor, denoted
+$\bar q_i$, $\bar Q$, and $\bar s_i=\bar q_i/\bar Q$. Superscript $0$ is reserved for the
+February–May 2026 demand anchor used in the three equilibrium sections: $q_i^0$ and $p^0$.
 
 The central specification assumes:
 
@@ -45,11 +53,14 @@ $$
 q_i(p_i)
 = q_i^0
 \left(
-\frac{p_i}{p_i^0}
+\frac{p_i}{p^0}
 \right)^{-\epsilon_i},
 $$
 
-where $q_i^0$ and $p_i^0$ are the anchor quantity and price, and $\epsilon_i$ is resource $i$'s own-price elasticity.
+where $q_i^0$ is quantity at the February–May 2026 demand anchor, $p_i$ is the effective price of
+resource $i$ per historical gas-equivalent unit, $p^0$ is the historical common-price anchor, and
+$\epsilon_i$ is resource $i$'s own-price elasticity. The superscript zero denotes the same
+historical anchor throughout the four reports.
 
 Under the historical one-dimensional fee market, all three resources pay the same base fee:
 
@@ -87,15 +98,17 @@ $$
 =\epsilon_{\mathrm{state}}-\epsilon_{\mathrm{execution}}.
 $$
 
-Thus $\Delta_i$ is not a resource share and is not itself an own-price elasticity. A positive $\Delta_i$ means that resource $i$ increases more than execution when the common fee falls; a negative value means that it increases less than execution. The actual shares $s_i$ move because the relative quantities move.
+Thus $\Delta_i$ measures resource $i$'s quantity response relative to execution. A positive value
+means that resource $i$ increases more than execution when the common fee falls; a negative value
+means that it increases less. The resource shares $s_i$ move with these relative quantities.
 
 At the anchor, aggregate elasticity is the resource-share-weighted mean:
 
 $$
 \epsilon_{\mathrm{agg}}
-=s_{\mathrm{execution}}^0\epsilon_{\mathrm{execution}}
-+s_{\mathrm{data}}^0\epsilon_{\mathrm{data}}
-+s_{\mathrm{state}}^0\epsilon_{\mathrm{state}}.
+=\bar s_{\mathrm{execution}}\epsilon_{\mathrm{execution}}
++\bar s_{\mathrm{data}}\epsilon_{\mathrm{data}}
++\bar s_{\mathrm{state}}\epsilon_{\mathrm{state}}.
 $$
 
 The three equations recover all three elasticities:
@@ -103,8 +116,8 @@ The three equations recover all three elasticities:
 $$
 \epsilon_{\mathrm{execution}}
 =\epsilon_{\mathrm{agg}}
--s_{\mathrm{data}}^0\Delta_{\mathrm{data}}
--s_{\mathrm{state}}^0\Delta_{\mathrm{state}},
+-\bar s_{\mathrm{data}}\Delta_{\mathrm{data}}
+-\bar s_{\mathrm{state}}\Delta_{\mathrm{state}},
 $$
 
 $$
@@ -115,7 +128,10 @@ $$
 =\epsilon_{\mathrm{execution}}+\Delta_{\mathrm{state}}.
 $$
 
-This recovery does not use EIP-7623. It replaces the aggregate-plus-softmax assumption with a different, transparent assumption: each resource responds only to its own price. That excludes cross-price substitution and the fact that one transaction can consume all three resources, so it should be treated as the central benchmark rather than a complete transaction-bundle model.
+This recovery is separate from the EIP-7623 calibration. It assumes that each resource responds to
+its own price. Cross-price substitution and multi-resource transaction bundles remain outside the
+independent specification, so we use it as the central benchmark and retain explicit coupling
+limitations.
 
 ## Aggregate-plus-softmax model as a sensitivity
 
@@ -126,42 +142,51 @@ v_i=a_i-\eta_i\ln p_i,
 \qquad
 s_i=\frac{\exp(v_i)}{\sum_j\exp(v_j)},
 \qquad
-q_i=s_iT.
+q_i=s_iQ.
 $$
 
 The symbols have the following meanings:
 
 | Symbol | Meaning |
 |---|---|
-| $T=\sum_j q_j$ | Total gas-equivalent demand across the three measured resources |
-| $s_i=q_i/T$ | Resource $i$'s share of that total; the softmax ensures $s_i>0$ and $\sum_i s_i=1$ |
+| $Q=\sum_j q_j$ | Total gas-equivalent demand across the three measured resources |
+| $s_i=q_i/Q$ | Resource $i$'s share of that total; the softmax ensures $s_i>0$ and $\sum_i s_i=1$ |
 | $v_i$ | Resource $i$'s composition score; a larger score produces a larger $s_i$ |
-| $a_i$ | Baseline composition constant, chosen so the model reproduces the anchor shares $s_i^0$ |
+| $a_i$ | Baseline composition constant, chosen so the model reproduces the recovery-anchor shares $\bar s_i$ |
 | $p_i$ | Effective price of resource $i$ |
 | $\eta_i$ | Sensitivity of resource $i$'s composition score to its own log price |
 
 Total demand responds to a weighted price index $R$:
 
 $$
-T=T_{\mathrm{ref}}
+Q=\bar Q
 \left(
-\frac{R}{R_{\mathrm{ref}}}
+\frac{R}{\bar R}
 \right)^{-\epsilon_{\mathrm{agg}}},
 \qquad
 \ln R=\sum_j w_j\ln p_j,
 $$
 
-Here $T_{\mathrm{ref}}$ and $R_{\mathrm{ref}}$ are the anchor total and price index, $w_i$ is resource $i$'s price-index weight, $\sum_i w_i=1$, and $\epsilon_{\mathrm{agg}}$ is the elasticity of total demand with respect to $R$.
+Here $\bar Q$ and $\bar R$ are the recovery-anchor total and price index, $w_i$ is resource $i$'s
+price-index weight, $\sum_i w_i=1$, and $\epsilon_{\mathrm{agg}}$ is the elasticity of total demand
+with respect to $R$.
 
-Under the historical common fee, $p_i=p$ for all resources. Relative to execution $E$:
+Under the historical common fee, $p_i=p$ for all resources. Relative to execution:
 
 $$
-\ln\frac{s_i}{s_E}
-=v_i-v_E
-=(a_i-a_E)-(\eta_i-\eta_E)\ln p.
+\ln\frac{s_i}{s_{\mathrm{execution}}}
+=v_i-v_{\mathrm{execution}}
+=(a_i-a_{\mathrm{execution}})
+-(\eta_i-\eta_{\mathrm{execution}})\ln p.
 $$
 
-Consequently, the event statistic defined above maps to $\Delta_i=\eta_i-\eta_E$ inside the softmax model. Historical common-price shocks identify $\eta_{\mathrm{data}}-\eta_{\mathrm{execution}}$ and $\eta_{\mathrm{state}}-\eta_{\mathrm{execution}}$, but during those common-price observations, adding the same constant to all three $\eta_i$ values shifts every $v_i$ by the same amount and leaves the shares unchanged. The softmax model therefore needs either an assumed $\eta_{\mathrm{execution}}$ or a calibration from an event in which relative resource prices move.
+Consequently, the event statistic defined above maps to
+$\Delta_i=\eta_i-\eta_{\mathrm{execution}}$ inside the softmax model. Historical common-price shocks
+identify $\eta_{\mathrm{data}}-\eta_{\mathrm{execution}}$ and
+$\eta_{\mathrm{state}}-\eta_{\mathrm{execution}}$, but during those common-price observations,
+adding the same constant to all three $\eta_i$ values shifts every $v_i$ by the same amount and
+leaves the shares unchanged. The softmax model therefore needs either an assumed
+$\eta_{\mathrm{execution}}$ or a calibration from an event in which relative resource prices move.
 
 Its general own-price elasticity is:
 
@@ -170,9 +195,12 @@ $$
 =\eta_i(1-s_i)+\epsilon_{\mathrm{agg}}w_i.
 $$
 
-At the common-price H0 anchor, we set price-index expenditure weights equal to measured resource gas shares, $w_i=s_i^0$. Gas shares and expenditure shares need not remain equal after EIP-7999 assigns different prices and units to each resource.
+At the common-price recovery anchor, we set price-index expenditure weights equal to measured
+resource gas shares, $w_i=\bar s_i$. Gas shares and expenditure shares may diverge after EIP-7999
+assigns different prices and units to each resource.
 
-This ambiguity belongs to the softmax specification. It is not a general failure of the gas-limit events to identify independent isoelastic demand curves.
+This ambiguity arises from the common component of the softmax parameters. The independent
+isoelastic curves remain identified under their own-price assumption.
 
 ## Data
 
@@ -218,7 +246,7 @@ The third event is excluded from the headline calibration because its post-windo
 
 The short window from November 26 through December 2 provides a supportive diagnostic: the fee fell from 0.160 to 0.047 gwei while calldata bytes rose 16% per block, implying $\Delta_{\mathrm{data}}\approx0.26$. Seven days are not enough to prove that Fusaka caused the full 35-day reversal, but the diagnostic supports treating the third event as confounded.
 
-The pooled event contrasts are:
+The mean estimates across the event sets are:
 
 | Events included | Mean $\epsilon_{\mathrm{agg}}$ | Mean $\Delta_{\mathrm{state}}$ | Mean $\Delta_{\mathrm{data}}$ |
 |---|---:|---:|---:|
@@ -270,7 +298,7 @@ The first sensitivity check varies $\eta_{\mathrm{execution}}$ from 0 to 0.3. Th
 Using the 45M anchor shares and
 
 $$
-\epsilon_i=\eta_i(1-s_i^0)+\epsilon_{\mathrm{agg}}s_i^0,
+\epsilon_i=\eta_i(1-\bar s_i)+\epsilon_{\mathrm{agg}}\bar s_i,
 $$
 
 the sweep gives:
@@ -301,21 +329,25 @@ $$
 
 The main window contains 60 daily observations before and after activation, with May 6–8 excluded. The pre-window runs from March 7 through May 5, and the post-window from May 9 through July 7. About 1.81% of pre-fork transactions satisfy the floor-bound proxy; their fraction of transactions falls to 1.44% after activation. Their calldata falls from approximately 4.75 kB to 3.77 kB per block.
 
-For the softmax calibration, let $D_t$ be treated standard calldata gas per block and $E_t$ be untreated execution gas per block in period $t\in\{\mathrm{pre},\mathrm{post}\}$. Define the two-category treated-data share:
+For the softmax calibration, let $d_t$ be treated standard calldata gas per block and $e_t$ be
+untreated execution gas per block in period $t\in\{\mathrm{pre},\mathrm{post}\}$. These lowercase
+symbols are local to the EIP-7623 calculation. Define the two-category treated-data share:
 
 $$
 \alpha_t
 =\alpha^{\mathrm{treated}}_{\mathrm{data}|\mathrm{execution},t}
 =
-\frac{D_t}{D_t+E_t}.
+\frac{d_t}{d_t+e_t}.
 $$
 
-This $\alpha_t$ is a gas-composition share used only for the treated data-versus-execution comparison. It is not the fraction of transactions that are floor-bound and it is not the three-resource share $s_i$. Its logit is the treated-data-to-execution log ratio:
+This $\alpha_t$ is the treated-data share within the two-category data-versus-execution comparison.
+The floor-bound transaction fraction and the three-resource share $s_i$ use different
+denominators. Its logit is the treated-data-to-execution log ratio:
 
 $$
 \operatorname{logit}(\alpha_t)
 =\ln\frac{\alpha_t}{1-\alpha_t}
-=\ln\frac{D_t}{E_t}.
+=\ln\frac{d_t}{e_t}.
 $$
 
 Let $\rho_{7623}=p_{\mathrm{post}}/p_{\mathrm{pre}}$ denote the effective treated-transaction price ratio. The treated data-versus-execution price response is:
@@ -394,7 +426,10 @@ The state-excluded EIP-7623 estimate is useful for calibrating the softmax model
 2. Pectra simultaneously increased blob capacity, making blobs a cheaper substitute for calldata-heavy transactions.
 3. Floor-bound transactions are unusually exposed to calldata prices, while most calldata gas did not face the floor.
 
-State is the most responsive resource throughout the sweep. The data-versus-execution ordering is not robust within the softmax family: with $\eta_{\mathrm{execution}}=0$, data elasticity is slightly below execution elasticity. The independent model and the selected EIP-7623 softmax calibration instead give state $>$ data $>$ execution.
+State is the most responsive resource throughout the sweep. The data-versus-execution ordering
+changes within the softmax family: with $\eta_{\mathrm{execution}}=0$, data elasticity is slightly
+below execution elasticity. The independent model and the selected EIP-7623 softmax calibration
+give state $>$ data $>$ execution.
 
 ## Implications for EIP-7999
 
@@ -407,10 +442,20 @@ $$
 
 with the window table defining the first sensitivity range. The aggregate-plus-softmax results provide a separate structural check rather than the headline input.
 
-The evidence supports treating data demand differently from execution demand. Combined with the propagation constraint and worst-case payload rationale for a bandwidth limit, this strengthens the case for a separate EIP-7999 data resource. The elasticity evidence alone does not prove that a separate resource is optimal.
+The evidence supports treating data demand differently from execution demand. Combined with the
+propagation constraint and worst-case payload rationale for a bandwidth limit, this strengthens the
+case for a separate EIP-7999 data resource. Selecting an optimal resource design also requires
+propagation, implementation, and transaction-coupling evidence.
 
-These elasticities are reduced-form H0 priors. They do not by themselves solve future bundle demand. Under EIP-7999, one state-creating transaction can consume execution gas, data or BAL gas, and state gas simultaneously. Equilibrium simulations must preserve that coupling, either through transaction replay, bundle recipes, or explicit cross-price sensitivity checks.
+These elasticities are reduced-form H0 priors. Future bundle demand requires an additional coupling
+model. Under EIP-7999, one state-creating transaction can consume execution gas, data or BAL gas,
+and state gas simultaneously. Equilibrium simulations must preserve that coupling through
+transaction replay, bundle recipes, or explicit cross-price sensitivity checks.
 
 ## Measurement limitation
 
-State creation is approximated from positive daily inventory changes rather than measured transaction by transaction. Over the 123 days where a transaction-derived measure is available, the two measurements have correlation 0.99, but the daily proxy is about 28% higher on average. This raises the state anchor share from roughly 16% to 20.7% and shifts the recovered elasticities by about 0.01–0.02. Some state-creating operations were also historically undercharged, including ETH transfers to new accounts.
+State creation is approximated from positive daily inventory changes. A transaction-derived measure
+is available for 123 days and has correlation 0.99 with the daily proxy; the proxy is about 28%
+higher on average. This raises the state anchor share from roughly 16% to 20.7% and shifts the
+recovered elasticities by about 0.01–0.02. Some state-creating operations were also historically
+undercharged, including ETH transfers to new accounts.

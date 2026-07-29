@@ -245,6 +245,7 @@ def test_direct_state_runtime_attribution_reconciles_two_components():
     assert state_tx["direct_new_storage_value_bytes_8279"] == 32
     assert state_tx["direct_create_address_bytes_8279"] == 20
     assert state_tx["direct_create_nonce_bytes_8279"] == 8
+    assert state_tx["direct_create_endowment_bytes_8279"] == 0
     assert state_tx["direct_new_account_access_bytes_8279"] == 20
     assert state_tx["direct_new_account_balance_bytes_8279"] == 32
     assert state_tx["direct_deployed_code_bytes_8279"] == 10
@@ -261,8 +262,61 @@ def test_direct_state_runtime_attribution_reconciles_two_components():
     assert block["bal_runtime_bytes_state_8279"] == 154
     assert block["bal_runtime_bytes_execution_8279"] == 168
     assert block["bal_runtime_bytes_8279"] == 322
+    assert block["bal_runtime_bytes_state_bundle_8279"] == 270
+    assert block["bal_runtime_bytes_coproduced_state_txs_8279"] == 116
+    assert block["bal_runtime_bytes_nonstate_txs_8279"] == 52
+    assert block["attributed_transactions"] == 2
     assert block["runtime_transactions"] == 2
     assert block["state_runtime_transactions"] == 1
+    assert block["state_bundle_transactions_in_attribution"] == 1
+    assert block["direct_state_transactions"] == 1
+    assert block["storage_key_bytes_direct_state_8279"] == 32
+    assert block["storage_key_bytes_coproduced_state_txs_8279"] == 64
+    assert block["storage_key_bytes_nonstate_txs_8279"] == 32
+
+
+def test_endowed_contract_creation_is_direct_state_runtime_bytes():
+    counts = pd.DataFrame(
+        [
+            {
+                "block_number": 1,
+                "tx_index": 0,
+                "tx_hash": "0xa",
+                "cold_account_accesses": 0,
+                "cold_storage_accesses": 0,
+                "storage_value_entries_observed": 0,
+                "positive_value_calls": 0,
+                "positive_value_selfdestructs": 0,
+                "internal_creates": 1,
+                "internal_create_endowments": 1,
+                "internal_deployed_code_bytes": 0,
+            }
+        ]
+    )
+    state = pd.DataFrame(
+        [
+            {
+                "block_number": 1,
+                "tx_index": 0,
+                "tx_hash": "0xa",
+                "new_storage_slots": 0,
+                "new_accounts": 1,
+                "code_bytes": 0,
+                "new_delegation_indicators": 0,
+                "historical_state_creation_gas": 183_480,
+            }
+        ]
+    )
+
+    result = attribute_direct_state_runtime_bytes(
+        attach_state_bundle(compute_eip8279_runtime_bytes(counts), state)
+    )
+    assert result.loc[0, "direct_create_endowment_bytes_8279"] == 32
+    assert result.loc[0, "bal_runtime_bytes_direct_state_8279"] == 60
+    block = aggregate_state_execution_runtime_blocks(result).iloc[0]
+    assert block["value_transfer_bytes_direct_state_8279"] == 32
+    assert block["contract_creation_bytes_direct_state_8279"] == 28
+    assert block["bal_runtime_bytes_state_8279"] == 60
 
 
 def test_normalized_composite_costs_reconcile_and_sum_to_one():

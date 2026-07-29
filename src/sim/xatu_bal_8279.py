@@ -56,7 +56,48 @@ DIRECT_STATE_BYTE_COLUMNS = [
     "direct_new_account_balance_bytes_8279",
     "direct_create_address_bytes_8279",
     "direct_create_nonce_bytes_8279",
+    "direct_create_endowment_bytes_8279",
     "direct_deployed_code_bytes_8279",
+]
+
+RUNTIME_COMPONENT_SPECS = [
+    (
+        "storage_key",
+        ["storage_key_bytes_8279"],
+        ["direct_new_storage_key_bytes_8279"],
+    ),
+    (
+        "storage_value",
+        ["storage_value_bytes_8279_observed"],
+        ["direct_new_storage_value_bytes_8279"],
+    ),
+    (
+        "account_access",
+        ["account_access_bytes_8279"],
+        ["direct_new_account_access_bytes_8279"],
+    ),
+    (
+        "value_transfer",
+        [
+            "balance_call_bytes_8279",
+            "balance_selfdestruct_bytes_8279",
+            "create_endowment_bytes_8279",
+        ],
+        [
+            "direct_new_account_balance_bytes_8279",
+            "direct_create_endowment_bytes_8279",
+        ],
+    ),
+    (
+        "contract_creation",
+        ["create_address_bytes_8279", "create_nonce_bytes_8279"],
+        ["direct_create_address_bytes_8279", "direct_create_nonce_bytes_8279"],
+    ),
+    (
+        "deployed_code",
+        ["deployed_code_bytes_8279"],
+        ["direct_deployed_code_bytes_8279"],
+    ),
 ]
 
 
@@ -543,6 +584,7 @@ def attribute_direct_state_runtime_bytes(classified: pd.DataFrame) -> pd.DataFra
         "positive_value_calls",
         "positive_value_selfdestructs",
         "internal_creates",
+        "internal_create_endowments",
         "deployed_code_bytes_8279",
     }
     missing = sorted(required.difference(classified.columns))
@@ -562,6 +604,9 @@ def attribute_direct_state_runtime_bytes(classified: pd.DataFrame) -> pd.DataFra
         ["new_storage_slots", "storage_value_entries_observed"]
     ].min(axis=1)
     matched_create_accounts = out[["new_accounts", "internal_creates"]].min(axis=1)
+    matched_create_endowments = pd.concat(
+        [matched_create_accounts, out["internal_create_endowments"]], axis=1
+    ).min(axis=1)
     remaining_new_accounts = (out["new_accounts"] - matched_create_accounts).clip(
         lower=0
     )
@@ -593,6 +638,9 @@ def attribute_direct_state_runtime_bytes(classified: pd.DataFrame) -> pd.DataFra
     )
     out["direct_create_nonce_bytes_8279"] = (
         BAL_BYTES_PER_NONCE * matched_create_accounts
+    )
+    out["direct_create_endowment_bytes_8279"] = (
+        BAL_BYTES_PER_BALANCE * matched_create_endowments
     )
     out["direct_deployed_code_bytes_8279"] = out[
         ["code_bytes", "deployed_code_bytes_8279"]
@@ -638,13 +686,18 @@ def attribute_direct_state_runtime_bytes(classified: pd.DataFrame) -> pd.DataFra
 def aggregate_state_execution_runtime_blocks(
     attributed: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Aggregate transaction-level attribution into the central two-way split.
+    """Aggregate transaction-level attribution into two- and three-way splits.
 
     ``state`` is the runtime-meter component matched directly to persistent
     state creation. ``execution`` is the remaining runtime BAL component. The
     latter is interpreted as access-related activity and is represented by an
     execution-activity proxy in the aggregate demand model; the name does not
     imply that every remaining byte is caused by execution gas itself.
+
+    The three-way fields retain the subset of access-related bytes produced by
+    state-creating transactions.  This lets the compact block cache support the
+    co-produced-access sensitivity without retaining millions of transaction
+    rows.
     """
 
     required = {
@@ -667,19 +720,55 @@ def aggregate_state_execution_runtime_blocks(
     if (out[numeric] < 0).any().any():
         raise ValueError("Block-attribution inputs cannot be negative")
 
+    out["transaction"] = 1
     out["runtime_transaction"] = out["bal_runtime_bytes_8279"] > 0
     out["state_runtime_transaction"] = out["state_bundle"] & out[
         "runtime_transaction"
     ]
+    out["state_transaction"] = out["state_bundle"]
+    out["direct_state_transaction"] = (
+        out["bal_runtime_bytes_direct_state_8279"] > 0
+    )
+    component_three_way_columns = []
+    for component, total_columns, direct_columns in RUNTIME_COMPONENT_SPECS:
+        component_total = out[total_columns].sum(axis=1)
+        component_direct = out[direct_columns].sum(axis=1)
+        component_state_bundle = component_total.where(out["state_bundle"], 0)
+        direct_column = f"{component}_bytes_direct_state_8279"
+        coproduced_column = f"{component}_bytes_coproduced_state_txs_8279"
+        nonstate_column = f"{component}_bytes_nonstate_txs_8279"
+        out[direct_column] = component_direct
+        out[coproduced_column] = component_state_bundle - component_direct
+        out[nonstate_column] = component_total.where(~out["state_bundle"], 0)
+        if (out[coproduced_column] < 0).any():
+            raise ValueError(
+                f"Direct-state bytes exceed state-bundle bytes for {component}"
+            )
+        if not (
+            out[direct_column]
+            + out[coproduced_column]
+            + out[nonstate_column]
+        ).equals(component_total):
+            raise ValueError(f"Three-way component attribution failed for {component}")
+        component_three_way_columns.extend(
+            [direct_column, coproduced_column, nonstate_column]
+        )
     sum_columns = [
         *RUNTIME_COUNT_COLUMNS,
         *RUNTIME_BYTE_COLUMNS,
         *DIRECT_STATE_BYTE_COLUMNS,
         "bal_runtime_bytes_8279",
         "bal_runtime_bytes_direct_state_8279",
+        "bal_runtime_bytes_state_bundle_8279",
+        "bal_runtime_bytes_coproduced_state_txs_8279",
+        "bal_runtime_bytes_nonstate_txs_8279",
         "bal_runtime_bytes_access_related_8279",
+        "transaction",
         "runtime_transaction",
         "state_runtime_transaction",
+        "state_transaction",
+        "direct_state_transaction",
+        *component_three_way_columns,
     ]
     block = out.groupby("block_number", as_index=False)[sum_columns].sum()
     block = block.rename(
@@ -690,8 +779,11 @@ def aggregate_state_execution_runtime_blocks(
             "bal_runtime_bytes_access_related_8279": (
                 "bal_runtime_bytes_execution_8279"
             ),
+            "transaction": "attributed_transactions",
             "runtime_transaction": "runtime_transactions",
             "state_runtime_transaction": "state_runtime_transactions",
+            "state_transaction": "state_bundle_transactions_in_attribution",
+            "direct_state_transaction": "direct_state_transactions",
         }
     )
     if not (
@@ -699,6 +791,12 @@ def aggregate_state_execution_runtime_blocks(
         + block["bal_runtime_bytes_execution_8279"]
     ).equals(block["bal_runtime_bytes_8279"]):
         raise ValueError("State/execution block attribution does not reconcile")
+    if not (
+        block["bal_runtime_bytes_state_8279"]
+        + block["bal_runtime_bytes_coproduced_state_txs_8279"]
+        + block["bal_runtime_bytes_nonstate_txs_8279"]
+    ).equals(block["bal_runtime_bytes_8279"]):
+        raise ValueError("Three-way block attribution does not reconcile")
 
     int_columns = [column for column in block.columns if column != "block_number"]
     block[["block_number", *int_columns]] = block[

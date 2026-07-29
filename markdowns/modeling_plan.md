@@ -48,12 +48,17 @@ D_{\mathrm{total}}(p_D)
 =D_{\mathrm{static},0}
 \left(\frac{p_D}{p_D^0}\right)^{-\epsilon_{\mathrm{static}}}
 +B_0\left[
-w_{\mathrm{state}}\frac{S^*}{S_0}
-+w_{\mathrm{execution}}\frac{A^*}{A_0}
+\omega_{\mathrm{state}}(\lambda)\frac{S^*}{S_0}
++\omega_{\mathrm{execution}}(\lambda)\frac{A^*}{A_0}
 \right],
 $$
 
-where $A$ is existing-state access activity. Notebook 1.11 estimates $w_{\mathrm{state}}=0.113932$ and $w_{\mathrm{execution}}=0.886068$ from the full 6,000-block transaction attribution. Because an independently priced access index is not yet available, the aggregate model uses
+where $A$ is existing-state access activity. Notebook 1.11 estimates a 0.113937 direct-state
+share, a 0.378791 co-produced share inside state-creating transactions, and a 0.507272 share from
+transactions with no observed state creation. The central model sets $\lambda=0$, giving
+$\omega_{\mathrm{state}}(0)=0.113937$ and
+$\omega_{\mathrm{execution}}(0)=0.886063$. Because an independently priced access index is
+unavailable, the aggregate model uses
 
 $$
 \frac{A_t}{A_0}\approx\left(\frac{E_t}{E_0}\right)^{\rho_A},
@@ -81,14 +86,18 @@ In the equilibrium implementation and intended replay specification,
 
 $$
 B_t=B_0\left[
-w_{\mathrm{state}}
+\omega_{\mathrm{state}}(\lambda)
 \frac{S_t}{S_0}
-+w_{\mathrm{execution}}
++\omega_{\mathrm{execution}}(\lambda)
 \frac{A_t}{A_0}
 \right].
 $$
 
-The priced EIP-8279 runtime anchor gives $B_0/E_0=0.080155$ BAL gas per historical execution gas, equivalent to about 5.01 kB of runtime-metered BAL content per million historical execution gas. The same 6,000-block panel estimates the 0.113932 state-linked weight and 0.886068 execution-linked weight. Until an explicit access index is available, the implementation uses $(E_t/E_0)^{\rho_A}$ with $\rho_A=1$ centrally.
+The priced EIP-8279 runtime anchor gives $B_0/E_0=0.080155$ BAL gas per historical execution gas,
+equivalent to about 5.01 kB of runtime-metered BAL content per million historical execution gas.
+The central $\lambda=0$ allocation gives a 0.113937 state weight and a 0.886063 execution/access
+weight. Until an explicit access index is available, the implementation uses
+$(E_t/E_0)^{\rho_A}$ with $\rho_A=1$ centrally.
 
 The shock vector is resampled jointly, and bootstrap chunks are contiguous. This preserves contemporaneous execution/data/state co-movement and short-run persistence. It does **not** create counterfactual transaction coupling. A transaction consuming several resources should respond to several fees; that enters separately through the elasticity-matrix demand sensitivity in [src/dynamics/demand.py](../src/dynamics/demand.py). Capacity coupling is also separate: the fixed-bundle inclusion sensitivity scales the resource vector together when one hard limit binds.
 
@@ -157,7 +166,11 @@ Split into "estimate from data," "bound by sensitivity," and "configure from the
 - **Shock process**: the price-neutral baseline, the shock distribution, and the **bootstrap window length** that reproduces historical autocorrelation and cross-resource correlation. Fit these choices to the price-adjusted shock observations.
 - **Static bandwidth metering**: the byte→resource-gas mapping (candidate `16 gas/byte`) for calldata, access lists, authorization tuples, and blob hashes.
 - **BAL technological coefficient**: the direct 6,000-block EIP-8279 runtime anchor gives $B_0/E_0=0.080155$ BAL gas per historical execution gas, equivalent to about 5.01 kB of runtime-metered BAL content per million execution gas.
-- **Runtime BAL decomposition**: notebook 1.11 uses the full 6,000-block transaction attribution to estimate a 0.113932 state-linked runtime weight and a 0.886068 execution-linked runtime weight.
+- **Runtime BAL decomposition**: notebook 1.11 uses the full 6,000-block transaction attribution
+  to estimate shares of 0.113937 for direct state creation, 0.378791 for co-produced access inside
+  state-creating transactions, and 0.507272 for transactions with no observed state creation. The
+  central $\lambda=0$ allocation gives a 0.113937 state weight and a 0.886063 execution/access
+  weight.
 
 **Central reduced-form assumptions**
 

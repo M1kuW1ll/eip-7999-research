@@ -14,6 +14,7 @@ from .rpc_authorizations import (
     query_xatu_type4_transactions,
 )
 from .rpc_access_lists import fetch_access_list_data_for_blocks
+from .rpc_static_data import fetch_static_data_records_for_blocks
 from .rpc_state_growth import (
     summarize_rpc_state_growth_for_block,
     summarize_rpc_state_growth_for_blocks,
@@ -34,6 +35,7 @@ __all__ = [
     "build_rpc_bal_from_traces",
     "fetch_access_list_data_for_blocks",
     "fetch_authorization_data_for_blocks",
+    "fetch_static_data_records_for_blocks",
     "generate_synthetic_blocks",
     "load_config",
     "query_xatu_calldata_by_block",

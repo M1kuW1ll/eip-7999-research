@@ -33,6 +33,8 @@ def _empty_tx_inputs_frame() -> pd.DataFrame:
             "calldata_nonzero_bytes",
             "calldata_bytes",
             "standard_calldata_gas",
+            "blob_versioned_hash_count",
+            "blob_versioned_hash_bytes",
         ]
     )
 
@@ -97,7 +99,8 @@ def query_xatu_transaction_gas_inputs(
             n_input_zero_bytes AS calldata_zero_bytes,
             n_input_nonzero_bytes AS calldata_nonzero_bytes,
             n_input_bytes AS calldata_bytes,
-            4 * n_input_zero_bytes + 16 * n_input_nonzero_bytes AS standard_calldata_gas
+            4 * n_input_zero_bytes + 16 * n_input_nonzero_bytes AS standard_calldata_gas,
+            length(blob_hashes) AS blob_versioned_hash_count
         FROM default.execution_transaction FINAL
         WHERE meta_network_name = {network:String}
           AND block_hash IN {hashes:Array(FixedString(66))}
@@ -191,6 +194,8 @@ def query_xatu_transaction_gas_inputs(
             f"canonical coverage. First missing blocks: {missing_by_block}"
         )
 
+    out["blob_versioned_hash_bytes"] = 32 * out["blob_versioned_hash_count"]
+
     int_columns = [
         "block_number",
         "tx_index",
@@ -201,6 +206,8 @@ def query_xatu_transaction_gas_inputs(
         "calldata_nonzero_bytes",
         "calldata_bytes",
         "standard_calldata_gas",
+        "blob_versioned_hash_count",
+        "blob_versioned_hash_bytes",
     ]
     out[int_columns] = out[int_columns].astype("int64")
     return out[_empty_tx_inputs_frame().columns].reset_index(drop=True)

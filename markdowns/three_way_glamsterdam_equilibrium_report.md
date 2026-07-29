@@ -1,6 +1,10 @@
 # Glamsterdam Equilibrium Base Fees Under Three-Resource Demand
 
-This report solves the shared Glamsterdam base fee for execution, data, and state demand. The central calculation uses the independent isoelastic elasticities recovered from previous report. The aggregate-plus-softmax model, calibrated with the state-excluded EIP-7623 estimate, is retained as a structural sensitivity.
+This report solves the shared Glamsterdam base fee for execution, data, and state demand. The
+central calculation uses the independent isoelastic elasticities recovered in the
+[resource-elasticity report](three_way_resource_elasticity_report.md). The
+aggregate-plus-softmax model, calibrated with the state-excluded EIP-7623 estimate, is retained as
+a structural sensitivity.
 
 The demand anchor and Glamsterdam metering multipliers come from a calibrated 120-day panel of February–May 2026.
 
@@ -10,12 +14,30 @@ The demand anchor and Glamsterdam metering multipliers come from a calibrated 12
 2. With the 35-day independent elasticities, the equilibrium shared base fee falls from **0.01000 gwei** at 100M to **0.000502 gwei** at 200M, **0.000258 gwei** at 250M, and **0.000149 gwei** at 300M. The 60M result is **0.55375 gwei**.
 3. EIP-8038 and EIP-2780 repricing makes regular gas bind at 60M and 100M. State gas binds from 150M through 300M.
 4. Across the 21-, 35-, and 60-day independent calibrations, the equilibrium ranges are **0.00442-0.01000 gwei** at 100M, **0.000245-0.00149 gwei** at 200M, **0.000110-0.000935 gwei** at 250M, and **0.000058-0.000639 gwei** at 300M.
-5. The state-excluded EIP-7623 softmax sensitivity gives **0.01858**, **0.000314**, **0.000157**, and **0.000088 gwei** at the same four limits. It is a structural check, not the central estimate.
+5. The state-excluded EIP-7623 softmax sensitivity gives **0.01858**, **0.000314**, **0.000157**,
+   and **0.000088 gwei** at the same four limits. These values provide the structural sensitivity;
+   the independent isoelastic results remain central.
 
 
 ## Glamsterdam fee market
+Glamsterdam retains one EIP-1559-style base fee but meters regular gas and state gas separately.
+The notation for resources, historical quantities, effective prices, and elasticities carries over
+from the resource-elasticity report. This section adds the following symbols:
 
-Glamsterdam retains one EIP-1559-style base fee but meters regular gas and state gas separately. For physical quantities $q_i$, the two metered branches are:
+| Notation | Definition |
+|---|---|
+| $i\in\{\mathrm{execution},\mathrm{data},\mathrm{state}\}$ | Resource index, unchanged from the elasticity report |
+| $b$, $b^*$ | Candidate and equilibrium Glamsterdam shared base fee |
+| $p^0$, $p_i(b)=m_i b$ | Historical common-price anchor and effective price of resource $i$ under Glamsterdam |
+| $q_i^0$, $q_i(b)$ | Anchor demand and demand at fee $b$, measured in historical gas-equivalent units |
+| $m_i$, $g_i(b)=m_iq_i(b)$ | Glamsterdam metering multiplier and resulting Glamsterdam gas |
+| $r_i(b)=p_i(b)/p^0$, $\epsilon_i$ | Effective-price ratio and own-price demand elasticity |
+| $g_{\mathrm{regular}}(b)$, $g_{\mathrm{state}}(b)$, $u(b)$ | Regular-branch gas, state-branch gas, and the larger branch counted by the shared fee market |
+| $G$, $T=G/2$ | Shared gas limit and target |
+> The superscript $0$ continues to denote the historical anchor. A
+> $\mathrm{Glamsterdam}$ superscript identifies Glamsterdam accounting.
+
+The regular branch contains execution and data, while the state branch contains state creation. Their metered gas quantities are:
 
 $$
 g_{\mathrm{regular}}(b)
@@ -43,25 +65,18 @@ $$
 \max\left\{g_{\mathrm{regular}}(b^*),g_{\mathrm{state}}(b^*)\right\}=T.
 $$
 
-| Gas limit | Shared target |
-|---:|---:|
-| 60M | 30M |
-| 100M | 50M |
-| 150M | 75M |
-| 200M | 100M |
-| 250M | 125M |
-| 300M | 150M |
 
 ## Anchor: 4-month panel of Feb-May 2026
 
-The anchor covers February 1 through May 31, 2026: 120 days and 860,505 blocks. Its reference base fee is the median of the daily median base fees, **0.1069 gwei**.
+The anchor covers February 1 through May 31, 2026: 120 days and 860,505 blocks. The historical
+common-price anchor $p^0$ is the median of the daily median base fees, **0.1069 gwei**.
 
 Gas accounting for three resources:
 - Data is the calldata gas, including EIP-7623 floor bound.
-- State is the calibrated scalable proxy expressed in historical gas-equivalent units.
+- State is the calibrated state creation proxy expressed in historical gas-equivalent units.
 - Execution is total current gas minus those data and state gas, so the three components sum to observed block gas.
 
-| Resource | Current quantity per block | Share |
+| Resource | Current gas quantity per block | Share |
 |---|---:|---:|
 | Execution | 23.942M | 78.84% |
 | Data | 1.181M | 3.89% |
@@ -70,31 +85,43 @@ Gas accounting for three resources:
 
 <!-- Using a recent common panel avoids combining demand from one period with metering ratios estimated from another. -->
 
-
 ## Why metering multipliers are required
 
-The demand anchor is observed under the current gas schedule, whereas the Glamsterdam target is stated in Glamsterdam gas. Those units are not directly comparable. For example, the same state creation that is represented by one unit of the historical state-gas proxy consumes substantially more gas after EIP-8037 repricing. The multiplier converts between the two accounting conventions while holding the underlying activity fixed.
+The demand anchor uses the current gas schedule, and the Glamsterdam target uses Glamsterdam gas.
+The multiplier converts between these accounting conventions while holding the underlying activity
+fixed. For example, one unit of the historical state-gas proxy consumes substantially more gas
+after EIP-8037 repricing.
 
-Let $q_i^0$ denote the current-regime gas-equivalent quantity of resource $i$ at the historical anchor. For the same transactions and state creation, let $g_i^G$ denote the gas charged under Glamsterdam. The metering multiplier is:
+Let $q_i^0$ denote the current-regime gas-equivalent quantity of resource $i$ at the historical
+anchor. For the same transactions and state creation, let $g_i^{\mathrm{Glamsterdam},0}$ denote the
+gas charged under Glamsterdam. The metering multiplier is:
 
 $$
 m_i =
-\frac{g_i^G}{q_i^0}.
+\frac{g_i^{\mathrm{Glamsterdam},0}}{q_i^0}.
 $$
 
-The multiplier enters the equilibrium calculation in two places. First, at a candidate shared base fee $b$, one unit of the historical activity costs $m_i b$ under the new gas schedule. Its effective price relative to the anchor is therefore:
+The multiplier enters the equilibrium calculation in two places. First, at a candidate shared base
+fee $b$, one unit of historical activity costs $p_i(b)=m_i b$ under the new gas schedule. Its
+effective price relative to the historical anchor is:
 
 $$
-r_i(b)=m_i\frac{b}{b_{\mathrm{ref}}}.
+r_i(b)
+=\frac{p_i(b)}{p^0}
+=m_i\frac{b}{p^0}.
 $$
 
-Demand responds to this price ratio. Second, the resulting physical demand is converted back into the gas counted against the Glamsterdam target:
+Demand responds to this price ratio. Second, the resulting activity quantity is converted into the
+gas counted against the Glamsterdam target:
 
 $$
 q_i(b)=q_i^0r_i(b)^{-\epsilon_i},
 \qquad
 g_i(b)=m_iq_i(b).
 $$
+
+Here $q_i(b)$ is shorthand for the demand function $q_i(p_i)$ from the elasticity report,
+evaluated at $p_i(b)=m_i b$.
 
 <!-- Without $m_i$, the model would assume that every activity consumes the same gas before and after repricing. It would understate both the price users face for heavily repriced activity and the amount that activity contributes to the fee-market target. A multiplier is consequently an accounting conversion. -->
 
@@ -104,25 +131,27 @@ To calculate each multiplier, we replay the same February–May 2026 activity un
 
 $$
 m_i =
-\frac{\sum_t g_{i,t}^{Glamsterdam}}
-{\sum_t q_{i,t}^{0}}.
+\frac{\sum_t g_{i,t}^{\mathrm{Glamsterdam}}}
+{\sum_t q_{i,t}^{\mathrm{historical}}}.
 $$
 
-For each resource, the numerator sums counterfactual gas across all 120 days and the denominator sums historical gas across the same days. We do not average daily multipliers. A day with more activity therefore contributes more gas to both totals automatically.
+Here $t$ indexes days, the numerator uses Glamsterdam accounting, and the denominator uses
+historical accounting for the same activity. The ratio is calculated from the two 120-day totals.
+A day with more activity contributes more gas to both totals automatically.
 
 The multiplier for each resource is listed as follows:
 
 | Resource | Central multiplier | Selection rule |
 |---|---:|---|
-| Execution | 1.538 | Replay the observed opcode and transaction paths under EIP-8038 and EIP-2780, reconstruct the EIP-8038 refund counter across the full 120-day Xatu range, and reapply the transaction-level 20% refund cap. |
+| Execution | 1.538 | Replay the observed opcode and transaction paths under EIP-8038 and EIP-2780, reconstruct the EIP-8038 refund counter, and reapply the transaction-level 20% refund cap. |
 | Data | 1.969 | Reprice the observed current-data quantity using the transaction-specific EIP-7976 uplift and the calibrated EIP-7981 transaction-access-list surcharge. |
 | State | 5.656 | Apply the EIP-8037 byte accounting and `CPSB = 1530` to the same state creation represented by the historical proxy. |
 
 
 ### Execution under EIP-8038 and EIP-2780
 
-The execution multiplier comes from EIP-8038 and EIP-2780, which change the pricing of state access and intrinsic gas.
-The largest contribution is storage-write repricing: EIP-8038 changes the regular first-write charge from 2,800 to 10,000 gas and the cold storage access charge from 2,100 to 3,000 gas. EIP-2780 partly offsets this increase because its sender component is 12,000 rather than 21,000, with recipient and value-transfer charges added according to each transaction path.
+The execution multiplier comes from [EIP-8038](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-8038.md) and [EIP-2780](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2780.md), which change the pricing of state access and intrinsic gas. The largest contribution is storage-write repricing: EIP-8038 changes the regular first-write charge from 2,800 to 10,000 gas and the cold storage access charge from 2,100 to 3,000 gas. EIP-2780 partly offsets this increase because its sender component is 12,000 rather than 21,000, with recipient and value-transfer charges added according to each transaction path.
+
 
 | Execution accounting | Gas per block |
 |---|---:|
@@ -145,9 +174,13 @@ $$
 
 Refunds are reconstructed for all 67.64 million refund-positive transactions in the 120-day range. The integer reconstruction identifies 99.82% of the observed refund counter; the remainder receives the same daily correction rate as the identified transactions. The refund calculation itself is Xatu-only. Small access-list and authorization-write components retain the existing RPC calibration because Xatu does not expose their complete transaction contents.
 
+![execution_repricing_8038_2780_2026-02-01_2026-06-01](https://hackmd.io/_uploads/H1oF_QrNGg.png)
+> The left panel shows how EIP-8038 and EIP-2780 change execution-gas accounting in the
+> February–May 2026 sample. The right panel shows the daily multiplier and its p10–p90 band.
+
 ### Data under EIP-7976 and EIP-7981
 
-For the same observed blocks, Glamsterdam data gas is constructed as:
+[EIP-7976](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7976.md) increases the calldata floor cost from 10/40 to 64/64 gas per zero/nonzero byte. [EIP-7981](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7981.md) introduced a cost of 64 gas per access list bytes (i.e., 1280 gas per address and 2048 gas per storage key). For the same observed blocks, Glamsterdam data gas is constructed as:
 
 | Component | Gas per block |
 |---|---:|
@@ -173,11 +206,17 @@ $$
 \max\left\{0,\ 64B_{tx}-g_{\mathrm{body},tx}^{\mathrm{current}}\right\}.
 $$
 
-We identify 19.90 million of 270.78 million transactions, or **7.35%**, as binding under the EIP-7976 floor. Together, these transactions add 0.776M gas per block, equal to **65.7% of current data gas**. This does not mean that every transaction's calldata cost rises by 65.7%. A minority of calldata-heavy transactions accounts for the entire increase. Meanwhile, EIP-7981 adds the specified data charge to transaction access-list bytes.
+Here $tx$ indexes transactions, $\Delta g_{7976,tx}$ is the additional gas imposed by the floor, $B_{tx}$ is the transaction's calldata size in bytes, and $g_{\mathrm{body},tx}^{\mathrm{current}}=g_{\mathrm{used},tx}-21{,}000$ is its observed receipt-body gas under EIP-7623.
+
+
+We identify 19.90 million of 270.78 million transactions, or 7.35%, as binding under the EIP-7976
+floor. Together, these transactions add 0.776M gas per block, equal to 65.7% of current data gas.
+The increase is concentrated in this calldata-heavy minority. EIP-7981 separately adds the
+specified data charge to transaction access-list bytes.
 
 ### State under EIP-8037
 
-The state proxy remains the scalable measure of physical state creation. We then price the same estimated account, storage, and code creation using the EIP-8037 state-gas schedule with `CPSB = 1530`.
+The state proxy remains the scalable measure of physical state creation. We then price the same estimated account, storage, and code creation using the [EIP-8037](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-8037.md) state-gas schedule with `CPSB = 1530`.
 
 | Accounting convention | State gas per block |
 |---|---:|
@@ -197,7 +236,7 @@ $$
 The central model assumes three independent demands:
 
 $$
-q_i(b)=q_i^0\left(m_i\frac{b}{b_{\mathrm{ref}}}\right)^{-\epsilon_i}.
+q_i(b)=q_i^0\left(m_i\frac{b}{p^0}\right)^{-\epsilon_i}.
 $$
 
 | Event window | $\epsilon_{\mathrm{execution}}$ | $\epsilon_{\mathrm{data}}$ | $\epsilon_{\mathrm{state}}$ |
@@ -212,40 +251,45 @@ Each resource responds to its own effective price.
 
 The central accounting uses $m_{\mathrm{execution}}=1.538$, $m_{\mathrm{data}}=1.969$, and $m_{\mathrm{state}}=5.656$.
 
-| Demand model | Gas limit | Target | Equilibrium base fee | 0.1069 gwei anchor fraction | Regular metered gas | State metered gas | Binding branch |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| Independent isoelastic | 60M | 30M | **0.553747 gwei** | 517.9% | **30.00M** | 9.57M | Regular |
-| Independent isoelastic | 100M | 50M | **0.009999 gwei** | 9.35% | **50.00M** | 36.71M | Regular |
-| Independent isoelastic | 200M | 100M | **0.000502 gwei** | 0.469% | 73.73M | **100.00M** | State |
-| Independent isoelastic | 250M | 125M | **0.000258 gwei** | 0.241% | 80.49M | **125.00M** | State |
-| Independent isoelastic | 300M | 150M | **0.000149 gwei** | 0.140% | 86.49M | **150.00M** | State |
+| Gas limit | Target | Equilibrium base fee | 0.1069 gwei anchor fraction | Regular metered gas | State metered gas | Binding branch |
+---:|---:|---:|---:|---:|---:|---:|
+| 60M | 30M | **0.553747 gwei** | 517.9% | **30.00M** | 9.57M | Regular |
+| 100M | 50M | **0.009999 gwei** | 9.35% | **50.00M** | 36.71M | Regular |
+| 200M | 100M | **0.000502 gwei** | 0.469% | 73.73M | **100.00M** | State |
+| 250M | 125M | **0.000258 gwei** | 0.241% | 80.49M | **125.00M** | State |
+| 300M | 150M | **0.000149 gwei** | 0.140% | 86.49M | **150.00M** | State |
 
 
 
 ### Event-window sensitivity
-| Gas limit | Event window | Equilibrium fee | Binding branch | Physical state share |
-|---:|---:|---:|---|---:|
-| 60M | 21 days | 0.606886 gwei | Regular | 4.9% |
-| 60M | **35 days** | **0.553747 gwei** | Regular | 8.1% |
-| 60M | 60 days | 1.404795 gwei | Regular | 7.5% |
-| 100M | 21 days | 0.009175 gwei | Regular | 18.8% |
-| 100M | **35 days** | **0.009999 gwei** | Regular | 16.9% |
-| 100M | 60 days | 0.004418 gwei | Regular | 19.8% |
-| 200M | 21 days | 0.001491 gwei | State | 30.7% |
-| 200M | **35 days** | **0.000502 gwei** | State | 27.3% |
-| 200M | 60 days | 0.000245 gwei | State | 29.9% |
-| 250M | 21 days | 0.000935 gwei | State | 34.3% |
-| 250M | **35 days** | **0.000258 gwei** | State | 30.1% |
-| 250M | 60 days | 0.000110 gwei | State | 33.1% |
-| 300M | 21 days | 0.000639 gwei | State | 37.4% |
-| 300M | **35 days** | **0.000149 gwei** | State | 32.5% |
-| 300M | 60 days | 0.000058 gwei | State | 35.8% |
+
+The [resource-elasticity report](three_way_resource_elasticity_report.md) finds that state elasticity
+is more sensitive to the event-window length than the execution and data estimates. Shorter windows
+produce a higher state elasticity, and longer windows produce a lower estimate.
+
+
+| Gas limit | Event window | Equilibrium fee | Binding branch |
+|---:|---:|---:|---:|
+| 60M | 21 days | 0.606886 gwei | Regular |
+| 60M | **35 days** | **0.553747 gwei** | Regular |
+| 60M | 60 days | 1.404795 gwei | Regular |
+| 100M | 21 days | 0.009175 gwei | Regular |
+| 100M | **35 days** | **0.009999 gwei** | Regular |
+| 100M | 60 days | 0.004418 gwei | Regular |
+| 200M | 21 days | 0.001491 gwei | State |
+| 200M | **35 days** | **0.000502 gwei** | State |
+| 200M | 60 days | 0.000245 gwei | State |
+| 250M | 21 days | 0.000935 gwei | State |
+| 250M | **35 days** | **0.000258 gwei** | State |
+| 300M | 21 days | 0.000639 gwei | State |
+| 300M | **35 days** | **0.000149 gwei** | State |
+| 300M | 60 days | 0.000058 gwei | State |
 
 The 200M, 250M, and 300M calculations extrapolate progressively farther from the anchor and are consequently more sensitive to the recovered state elasticity.
 
-![Glamsterdam equilibrium fees and state share across gas limits](../plots/three_way_equilibrium_gas_limit_curves_2026-02-01_2026-06-01.png)
+![three_way_equilibrium_gas_limit_curves_2026-02-01_2026-06-01](https://hackmd.io/_uploads/SyQzuXB4Mg.png)
+> The blue band spans the 21-, 35-, and 60-day independent calibrations. The green line uses the elasticities recovered from the aggregate-plus-softmax model.
 
-> The left panel reports the equilibrium shared base fee on a log scale; the blue points use the central 35-day independent elasticities, the blue band spans the 21-, 35-, and 60-day calibrations, and the green line is the state-excluded EIP-7623 softmax sensitivity. The right panel shows that the physical state share rises as capacity expands, consistent with the equilibrium switching from the regular-gas branch at 60M and 100M to the state branch from 150M onward.
 
 
 ## Which branch determines the equilibrium
@@ -255,12 +299,16 @@ The binding branch is the branch that reaches the shared target first as the bas
 $$
 g_i(b)
 =q_i^0m_i^{1-\epsilon_i}
-\left(\frac{b}{b_{\mathrm{ref}}}\right)^{-\epsilon_i}.
+\left(\frac{b}{p^0}\right)^{-\epsilon_i}.
 $$
 
-The multiplier has two opposing effects. It makes each unit of activity consume more metered gas, but it also raises the effective price $m_i b$ and reduces physical demand. State metered gas therefore scales with $m_{\mathrm{state}}^{1-\epsilon_{\mathrm{state}}}$ rather than directly with $m_{\mathrm{state}}$. With $m_{\mathrm{state}}=5.656$ and $\epsilon_{\mathrm{state}}=0.335$, the net factor at the reference fee is about $5.656^{0.665}=3.17$. The multiplier does not represent 5.656 times more physical state capacity.
+The multiplier increases metered gas per unit of activity and raises the effective price $m_i b$.
+The price response offsets part of the accounting increase. State metered gas therefore scales with
+$m_{\mathrm{state}}^{1-\epsilon_{\mathrm{state}}}$. With $m_{\mathrm{state}}=5.656$ and
+$\epsilon_{\mathrm{state}}=0.335$, the net factor at the reference fee is about
+$5.656^{0.665}=3.17$. This factor describes metered demand at the reference fee.
 
-State also starts from a much smaller historical quantity than execution. At the reference fee, after both metering and demand response, the 35-day independent model gives:
+State also starts from a much smaller historical quantity than execution. At the reference fee, after both metering and demand response, the independent demand model with elasticity recovered from 35-day window gives:
 
 | Resource or branch | Metered gas at the reference fee |
 |---|---:|
@@ -286,20 +334,20 @@ Once state is the binding branch, the independent-model condition is:
 
 $$
 T=m_{\mathrm{state}}q_{\mathrm{state}}^0
-\left(m_{\mathrm{state}}\frac{b^*}{b_{\mathrm{ref}}}\right)^{-\epsilon_{\mathrm{state}}},
+\left(m_{\mathrm{state}}\frac{b^*}{p^0}\right)^{-\epsilon_{\mathrm{state}}},
 $$
 
 so:
 
 $$
-\frac{b^*}{b_{\mathrm{ref}}} =
+\frac{b^*}{p^0} =
 \left(
 \frac{q_{\mathrm{state}}^0m_{\mathrm{state}}^{1-\epsilon_{\mathrm{state}}}}
 {T}
 \right)^{1/\epsilon_{\mathrm{state}}}.
 $$
 
-For $\epsilon_{\mathrm{state}}=0.335$, $b^*\propto T^{-2.986}$ and $b^*\propto m_{\mathrm{state}}^{1.986}$. Regular gas remains below the target at 200M, 250M, and 300M, so the state branch determines all three high-capacity fees.
+For $\epsilon_{\mathrm{state}}=0.335$, $b^*\propto T^{-2.986}$ and $b^*\propto m_{\mathrm{state}}^{1.986}$. Regular gas remains below the target at 200M, 250M, and 300M, so state determines the fees under higher block gas limits.
 
 ## Interpretation
 
@@ -307,19 +355,24 @@ The 60M result is above the historical fee anchor because regular execution is s
 
 At 200M, state activity is first repriced by the 5.656 multiplier, but the shared fee falls enough that its effective state price is about 2.65% of the historical anchor price.
 
-The 200M, 250M, and 300M results require physical state demand of 17.68M, 22.10M, and 26.52M historical gas-equivalent units per block, respectively. These are 3.37, 4.21, and 5.06 times the 5.24M anchor, so the results should be read as internal fixed points of the calibrated curve rather than evidence that activity will immediately expand by those amounts.
+The 200M, 250M, and 300M results require state-creation activity of 17.68M, 22.10M, and 26.52M
+historical gas-equivalent units per block, respectively. These are 3.37, 4.21, and 5.06 times the
+5.24M anchor. The values are internal fixed points of an extrapolated demand curve; realized future
+activity may differ substantially.
 
-The independent and softmax calculations answer different behavioral questions. The independent model asks how each activity changes with its own effective price. The softmax sensitivity additionally allows relative prices to reallocate demand among resources. Their difference measures dependence on the demand structure, not sampling error.
+The independent and softmax calculations answer different behavioral questions. The independent model tracks each activity changes with its own effective price. The softmax-plus-aggregate model allows relative prices to reallocate demand among resources. Their difference measures dependence on the demand structure.
 
 ## Measurement limitation
 
-The main empirical limitation is state measurement. Execution and current data gas come from protocol accounting, while physical state creation is inferred from a calibrated proxy and then translated into EIP-8037 gas. Bias in that proxy can affect the state anchor, the recovered state elasticity, and the equilibrium fee when state binds, as it does from 150M through 300M. The 120-day panel improves coverage, but it does not turn the proxy into direct protocol measurement.
-
-The independent-demand structure, the isoelastic extrapolation, and the use of a long-run fixed point are explicit modeling assumptions. They define what the calculation means; they are not additional measurement failures.
+The main empirical limitation is state measurement. Execution and current data gas come from
+protocol accounting. State creation is inferred from a calibrated proxy and translated into
+EIP-8037 gas, following the resource-elasticity analysis. Bias in that proxy can affect the state
+anchor, the recovered state elasticity, and the equilibrium fee when state binds, as it does from
+150M through 300M.
 
 ## Appendix: data sources and construction details
 
-The main calculations use Xatu for the full February-May 2026 range and a deterministic **5,997-block** sample from the Ethnodeops Erigon mainnet RPC where complete transaction objects or account-level traces are required.
+The main calculations use Xatu for the full February-May 2026 range and a 6,000 sample (50 per day for 120 days) from the Erigon mainnet RPC where complete transaction objects or account-level traces are required.
 
 ### Execution multiplier
 
@@ -332,7 +385,7 @@ The main calculations use Xatu for the full February-May 2026 range and a determ
 | `default.canonical_execution_transaction` | Receipt gas used |
 | `default.canonical_execution_storage_diffs` | Final storage changes used to reconstruct EIP-8038 refunds |
 
-Xatu does not expose complete access-list contents or authorization lists. Those terms use `data/calibration_rpc_state_access_auth_blocks_2026-02-01_2026-06-01.csv`. The RPC pull uses `debug_traceBlockByNumber` with `prestateTracer` and `diffMode=true`, `eth_getBlockReceipts`, and `eth_getBlockByNumber(..., true)` to supply access-list address and storage-key counts and authorization-write counts.
+Xatu does not expose complete access-list contents or authorization lists. The RPC pull uses `debug_traceBlockByNumber` with `prestateTracer` and `diffMode=true`, `eth_getBlockReceipts`, and `eth_getBlockByNumber(..., true)` to supply access-list address and storage-key counts and authorization-write counts.
 
 ### Data multiplier
 

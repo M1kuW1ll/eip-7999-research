@@ -29,11 +29,17 @@ markdowns/demand_model_plan.md
 !/plots/three_way_equilibrium_gas_limit_curves_2026-02-01_2026-06-01.png
 !/plots/calibration_bal_regression_2026-02-01_2026-06-01.png
 !/plots/bal_state_creation_coupling_calibration_2026-02-01_2026-06-01.png
+!/plots/bal_runtime_8279_three_way_components_2026-02-01_2026-06-01.png
 !/plots/daily_data_resource_components_runtime_8279_2026-02-01_2026-06-01.png
 !/plots/execution_repricing_8038_2780_2026-02-01_2026-06-01.png
 !/plots/full_7999_equilibrium_capacity_grid_2026-02-01_2026-06-01.png
 !/plots/full_7999_equilibrium_window_sensitivity_2026-02-01_2026-06-01.png
 !/plots/full_7999_data_equilibrium_boundary_2026-02-01_2026-06-01.png
+!/plots/full_7999_bal_lambda_beta_sensitivity_2026-02-01_2026-06-01.png
+!/plots/full_7999_bal_allocation_sensitivity_2026-02-01_2026-06-01.png
+!/plots/full_7999_bal_surcharge_sensitivity_2026-02-01_2026-06-01.png
+!/plots/full_7999_bal_capacity_grid_effects_2026-02-01_2026-06-01.png
+!/plots/full_7999_two_sided_bal_lambda_gamma_sensitivity_2026-02-01_2026-06-01.png
 
 # Archived plots remain generated artifacts except where an archived report
 # still embeds the figure.
