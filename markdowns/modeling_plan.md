@@ -2,9 +2,13 @@
 
 This note specifies the simulation we will use to grade EIP-7999 fee-market parameters: a stochastically-driven, elasticity-aware block replay, initialized at the counterfactual world's equilibrium, whose stationary path is the object we measure.
 
+> **Status:** This note documents the earlier notebooks 2.0--2.2, which are now
+> archived. The supported BAL bundle-pricing equilibrium and dynamic replay are
+> notebooks 2.4 and 2.5, respectively.
+
 ## Implementation status
 
-The first full-7999 scaffold is now implemented in [src/dynamics](../src/dynamics) and [notebook 2.1](../notebooks/2.1-full-7999-driven-replay-scaffold.ipynb). It includes:
+The first full-7999 scaffold was implemented in [src/dynamics](../src/dynamics) and [archived notebook 2.1](../archived/notebooks/2.1-full-7999-driven-replay-scaffold.ipynb). It includes:
 
 - the exact one-block 7999 transition shared with passive notebook 0.9;
 - the independent isoelastic demand curves recovered in notebook 1.8;
@@ -16,26 +20,26 @@ The first full-7999 scaffold is now implemented in [src/dynamics](../src/dynamic
 - stationary-path summaries after a configurable burn-in; and
 - deterministic checks for the notebook-2.0 warm starts and elasticity-off equivalence with passive replay.
 
-The notebook's correlated block shocks are a controlled mechanics test, not an empirical volatility result. A longer contiguous block panel remains the main data requirement. Notebook 2.0 already uses the induced runtime-BAL equation specified below, but notebook 2.1 still treats total metered data as one isoelastic demand curve. The dynamic replay is therefore a mechanism and warm-start scaffold until the static-data/BAL decomposition is wired into its demand driver.
+The notebook's correlated block shocks are a controlled mechanics test, not an empirical volatility result. A longer contiguous block panel remains the main data requirement. Archived notebook 2.0 already uses the induced runtime-BAL equation specified below, but archived notebook 2.1 still treats total metered data as one isoelastic demand curve. The dynamic replay is therefore a mechanism and warm-start scaffold until the static-data/BAL decomposition is wired into its demand driver.
 
 ## 0. The three resources and two conventions
 
 The mechanism side ([src/mechanisms/full_7999.py](../src/mechanisms/full_7999.py)) separates **execution**, **bandwidth**, and **state**. The driven demand side ([src/dynamics/demand.py](../src/dynamics/demand.py)) names its resources `execution`, `data`, `state`, where **`data` ≡ the bandwidth resource**. Its accounting is decomposed into static transaction content (calldata + access-list + authorization + blob-hash bytes) and BAL bytes induced by parent execution/state-access activity. The mapping is explicit at the replay boundary.
 
-Elasticities are recovered from historical physical quantities. Notebook 2.0 then transports each anchor into candidate-world resource gas while preserving the historical effective price. The driven replay consumes those candidate-world gas anchors directly, so it does not apply the metering conversion a second time.
+Elasticities are recovered from historical physical quantities. Archived notebook 2.0 then transports each anchor into candidate-world resource gas while preserving the historical effective price. The driven replay consumes those candidate-world gas anchors directly, so it does not apply the metering conversion a second time.
 
 ## 1. The two models and how they connect
 
 The simulation is built from two models that are usually kept separate but here feed each other:
 
-1. **A static equilibrium model** — a direct target-clearing calculation. Notebooks 1.9 and 2.0 provide the Glamsterdam and full-7999 integer protocol fees used for warm starts.
+1. **A static equilibrium model** — a direct target-clearing calculation. Notebook 1.9 and archived notebook 2.0 provide the Glamsterdam and earlier full-7999 integer protocol fees used for warm starts.
 2. **A dynamic stochastic model** — a forward block-by-block recursion of the real base-fee mechanism, driven by exogenous demand shocks. It produces the path used for volatility, reserve, and capacity metrics.
 
 The equilibrium model does **not** need to feed the dynamic model as a required stage. With shocks and reserve pricing disabled, both should recover the same deterministic fixed point. The equilibrium model earns its place in three supporting roles: **initialization**, **validation**, and **steady-state shortcuts** for questions that need no block path.
 
 ### 1.1 Equilibrium initialization
 
-For full 7999, notebook 2.0 retains independent target-clearing conditions for execution and persistent state creation,
+For full 7999, archived notebook 2.0 retains independent target-clearing conditions for execution and persistent state creation,
 
 $$
 g_i(p_i)=g_i^0\left(\frac{p_i}{p_i^0}\right)^{-\epsilon_i}=T_i,
@@ -65,11 +69,11 @@ $$
 \qquad \rho_A=1.
 $$
 
-Total execution is a reduced-form proxy for access activity; the execution-linked BAL component is not empirically shown to follow execution demand. The suffix identifies the proxy used in the model rather than a mechanical cause for every byte. The model also sets $\gamma_{\mathrm{BAL}}=0$, so BAL has no additional direct response to the data fee after its parent activities are determined. Notebook 2.0 converts each continuous solution to the nearest fee represented by the integer fake exponential. The replay must initialize from that represented protocol fee, not from a rounded continuous fee paired with unrelated excess gas. `make_full_7999_config` performs the inverse fake-exponential warm start.
+Total execution is a reduced-form proxy for access activity; the execution-linked BAL component is not empirically shown to follow execution demand. The suffix identifies the proxy used in the model rather than a mechanical cause for every byte. The model also sets $\gamma_{\mathrm{BAL}}=0$, so BAL has no additional direct response to the data fee after its parent activities are determined. Archived notebook 2.0 converts each continuous solution to the nearest fee represented by the integer fake exponential. The replay must initialize from that represented protocol fee, not from a rounded continuous fee paired with unrelated excess gas. `make_full_7999_config` performs the inverse fake-exponential warm start.
 
-Notebook 2.0 fixes the data limit at 90M, varies its target from one sixth through one half of the limit, and sweeps execution limits from 250M through 600M with targets at half the limit. Its central capacity path preserves the observed full-7999 metered data/execution ratio, $\kappa_0=0.109795$, by setting $T_E=T_D/\kappa_0$. The full Cartesian grid is retained as an imbalance stress test. Every solution is also checked against the one-wei protocol minimum; a continuous fee below one wei means the target cannot be cleared under the mechanism even if the algebraic isoelastic solution exists.
+Archived notebook 2.0 fixes the data limit at 90M, varies its target from one sixth through one half of the limit, and sweeps execution limits from 250M through 600M with targets at half the limit. Its central capacity path preserves the observed full-7999 metered data/execution ratio, $\kappa_0=0.109795$, by setting $T_E=T_D/\kappa_0$. The full Cartesian grid is retained as an imbalance stress test. Every solution is also checked against the one-wei protocol minimum; a continuous fee below one wei means the target cannot be cleared under the mechanism even if the algebraic isoelastic solution exists.
 
-The unconstrained equilibrium intentionally omits the data reserve. That is appropriate for initialization. With the reserve enabled, the dynamic path may settle away from the unconstrained target-clearing fee; this is a result rather than a validation failure. Notebook 2.1 therefore compares both the unconstrained data-fee start and a start at the contemporaneous blob-fee/12 threshold.
+The unconstrained equilibrium intentionally omits the data reserve. That is appropriate for initialization. With the reserve enabled, the dynamic path may settle away from the unconstrained target-clearing fee; this is a result rather than a validation failure. Archived notebook 2.1 therefore compares both the unconstrained data-fee start and a start at the contemporaneous blob-fee/12 threshold.
 
 ### 1.2 Demand, shocks, and transaction coupling
 

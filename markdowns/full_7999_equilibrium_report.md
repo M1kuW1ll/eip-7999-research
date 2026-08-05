@@ -576,9 +576,9 @@ prevents execution from reaching it. A protocol-constrained dynamic replay shoul
 realized execution usage into BAL demand.
 
 The executable surcharge calculation is in
-[notebook 2.0](../notebooks/2.0-full-7999-equilibrium-model.ipynb). The two-sided demand-curve
+[archived notebook 2.0](../archived/notebooks/2.0-full-7999-equilibrium-model.ipynb). The two-sided demand-curve
 calculation is in
-[notebook 2.2](../notebooks/2.2-full-7999-two-sided-bal-equilibrium.ipynb).
+[archived notebook 2.2](../archived/notebooks/2.2-full-7999-two-sided-bal-equilibrium.ipynb).
 
 ## Conclusion
 
@@ -773,5 +773,5 @@ therefore an execution-side constraint in every scenario studied here.
 - State metering: 120-day EIP-8037 accounting with `CPSB = 1530`.
 
 The executable calculations are in
-[notebook 2.0](../notebooks/2.0-full-7999-equilibrium-model.ipynb) and
-[notebook 2.2](../notebooks/2.2-full-7999-two-sided-bal-equilibrium.ipynb). -->
+[archived notebook 2.0](../archived/notebooks/2.0-full-7999-equilibrium-model.ipynb) and
+[archived notebook 2.2](../archived/notebooks/2.2-full-7999-two-sided-bal-equilibrium.ipynb). -->

@@ -10,3 +10,5 @@ rlp
 requests
 eth-keys
 eth-utils
+scipy
+statsmodels

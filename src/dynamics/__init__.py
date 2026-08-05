@@ -3,10 +3,13 @@
 from .allocation import (
     Allocation,
     InclusionRule,
+    ParentBALConsistentCaps,
     ProportionalBundleCaps,
     SeparateResourceCaps,
 )
 from .demand import (
+    BundleDemandEvaluation,
+    BundlePriced7999Demand,
     DEMAND_RESOURCES,
     ElasticityMatrixDemand,
     IndependentIsoelasticDemand,
@@ -21,6 +24,8 @@ from .full_7999 import (
 
 __all__ = [
     "Allocation",
+    "BundleDemandEvaluation",
+    "BundlePriced7999Demand",
     "DEMAND_RESOURCES",
     "DEMAND_TO_MECHANISM",
     "DEFAULT_GAS_QUANTUM",
@@ -28,6 +33,7 @@ __all__ = [
     "InclusionRule",
     "IndependentIsoelasticDemand",
     "MeteredDemandModel",
+    "ParentBALConsistentCaps",
     "ProportionalBundleCaps",
     "SeparateResourceCaps",
     "run_driven_full_7999",

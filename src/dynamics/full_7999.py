@@ -64,6 +64,7 @@ def run_driven_full_7999(
     demand_model: MeteredDemandModel,
     shock_path: JointShockPath,
     blob_base_fee_per_gas: int | Sequence[int] | None,
+    access_shock_path: Sequence[float] | None = None,
     inclusion_rule: InclusionRule | None = None,
     gas_quantum: Mapping[str, int] | None = None,
     first_block_number: int = 0,
@@ -80,6 +81,12 @@ def run_driven_full_7999(
     ``shock_path`` must contain block-frequency observations.  Daily shocks
     cannot be silently repeated across 12-second updates; a later multiscale
     model will combine slow daily conditions with within-day block shocks.
+
+    ``access_shock_path`` is the optional per-block access-composition residual:
+    how access-heavy a block is for its parent activity.  It is carried
+    separately from ``shock_path`` because BAL is not independently demanded,
+    so it is not a fourth demand shock.  A component-aware demand model
+    receives it under the ``"access"`` key; models without that key ignore it.
     """
 
     if step_seconds <= 0:
@@ -96,10 +103,16 @@ def run_driven_full_7999(
             raise ValueError(f"gas_quantum[{resource!r}] must be positive")
 
     shocks = shock_path.values.reset_index(drop=True)
+    if access_shock_path is None:
+        access_shocks = [1.0] * len(shocks)
+    else:
+        access_shocks = [float(item) for item in access_shock_path]
+        if len(access_shocks) != len(shocks):
+            raise ValueError("access shock path length must match the shock path")
+        if any(not math.isfinite(item) or item <= 0 for item in access_shocks):
+            raise ValueError("access shocks must be finite and positive")
     if tuple(shocks.columns) != DEMAND_RESOURCES:
-        raise ValueError(
-            "shock path columns must be exactly execution, data, state"
-        )
+        raise ValueError("shock path columns must be exactly execution, data, state")
     if len(shocks) == 0:
         raise ValueError("shock path must contain at least one block")
 
@@ -132,14 +145,42 @@ def run_driven_full_7999(
         shock = {resource: float(shock_row[resource]) for resource in DEMAND_RESOURCES}
         if any(not math.isfinite(value) or value < 0 for value in shock.values()):
             raise ValueError("demand shocks must be finite and non-negative")
+        evaluator = getattr(demand_model, "evaluate_with_shocks", None)
+        evaluation = None
+        demand_diagnostics: dict[str, float] = {}
+        if callable(evaluator):
+            evaluation = evaluator(
+                current_fees,
+                {**shock, "access": access_shocks[offset]},
+            )
+            offered_before_quantization = dict(evaluation.offered_gas)
+            diagnostics = getattr(evaluation, "diagnostics", None)
+            if callable(diagnostics):
+                demand_diagnostics = {
+                    str(name): float(value) for name, value in diagnostics().items()
+                }
+        else:
+            offered_before_quantization = {
+                resource: float(deterministic[resource]) * shock[resource]
+                for resource in DEMAND_RESOURCES
+            }
         offered = {
             resource: _quantize_nearest(
-                float(deterministic[resource]) * shock[resource],
+                offered_before_quantization[resource],
                 int(quanta[resource]),
             )
             for resource in DEMAND_RESOURCES
         }
-        allocation = allocator.allocate(offered, limits, quanta)
+        component_allocator = getattr(allocator, "allocate_components", None)
+        if callable(component_allocator) and evaluation is not None:
+            allocation = component_allocator(
+                evaluation,
+                offered,
+                limits,
+                quanta,
+            )
+        else:
+            allocation = allocator.allocate(offered, limits, quanta)
         blob_fee = blob_fees[offset]
 
         block = PassiveBlockUsage(
@@ -168,14 +209,16 @@ def run_driven_full_7999(
             "bundle_scale": float(allocation.bundle_scale),
             "binding_resources": ",".join(allocation.binding_resources),
             "blob_base_fee_per_gas": blob_fee,
-            "data_reserve_active": bool(
-                step.reserve_active_by_resource["bandwidth"]
-            ),
+            "data_reserve_active": bool(step.reserve_active_by_resource["bandwidth"]),
             "data_reserve_threshold_wei": reserve_anchor_threshold_base_fee(
                 blob_fee,
                 config.resources["bandwidth"],
             ),
         }
+        row.update(demand_diagnostics)
+        row.update(
+            {str(name): float(value) for name, value in allocation.diagnostics.items()}
+        )
         for resource in DEMAND_RESOURCES:
             mechanism_resource = DEMAND_TO_MECHANISM[resource]
             gas_limit = limits[resource]
@@ -200,9 +243,7 @@ def run_driven_full_7999(
                     f"{resource}_shock": shock[resource],
                     f"{resource}_offered_gas": int(offered[resource]),
                     f"{resource}_included_gas": included,
-                    f"{resource}_unserved_gas": int(
-                        allocation.unserved_gas[resource]
-                    ),
+                    f"{resource}_unserved_gas": int(allocation.unserved_gas[resource]),
                     f"{resource}_gas_target": int(targets[resource]),
                     f"{resource}_gas_limit": gas_limit,
                     f"{resource}_pct_target": included / int(targets[resource]),
@@ -214,13 +255,9 @@ def run_driven_full_7999(
                         if gas_limit is None
                         else int(offered[resource]) > int(gas_limit)
                     ),
-                    f"{resource}_rationed": int(
-                        allocation.unserved_gas[resource]
-                    ) > 0,
+                    f"{resource}_rationed": int(allocation.unserved_gas[resource]) > 0,
                     f"{resource}_limit_hit": (
-                        False
-                        if gas_limit is None
-                        else included == int(gas_limit)
+                        False if gas_limit is None else included == int(gas_limit)
                     ),
                 }
             )

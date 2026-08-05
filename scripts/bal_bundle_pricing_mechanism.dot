@@ -1,0 +1,111 @@
+digraph bal_bundle_pricing_mechanism {
+  graph [
+    rankdir=LR,
+    bgcolor="white",
+    pad=0.22,
+    nodesep=0.42,
+    ranksep=0.72,
+    splines=polyline,
+    outputorder=edgesfirst
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="Arial",
+    fontsize=15,
+    margin="0.18,0.12",
+    color="#64748B",
+    fillcolor="#F8FAFC",
+    fontcolor="#172033",
+    penwidth=1.25
+  ];
+
+  edge [
+    fontname="Arial",
+    fontsize=12,
+    color="#64748B",
+    fontcolor="#475569",
+    arrowsize=0.75,
+    penwidth=1.35
+  ];
+
+  b_execution [label="Execution base fee", fillcolor="#E8F1FB", color="#4C78A8"];
+  b_data [label="Data base fee", fillcolor="#FFF1E5", color="#F58518"];
+  b_state [label="State base fee", fillcolor="#EAF6E8", color="#54A24B"];
+
+  p_execution [
+    label="BAL-inclusive execution price\nexecution charge + BAL data charge",
+    fillcolor="#E8F1FB",
+    color="#4C78A8"
+  ];
+  p_static [
+    label="Static-data price",
+    fillcolor="#FFF1E5",
+    color="#F58518"
+  ];
+  p_state [
+    label="BAL-inclusive state price\nstate charge + BAL data charge",
+    fillcolor="#EAF6E8",
+    color="#54A24B"
+  ];
+
+  q_execution [label="Isoelastic execution demand"];
+  g_static [label="Isoelastic static-data demand"];
+  q_state [label="Isoelastic state demand"];
+
+  u_execution [label="Execution gas used", fillcolor="#E8F1FB", color="#4C78A8"];
+  g_bal [
+    label="Runtime BAL data gas\nfrom realized execution\nand state activity",
+    fillcolor="#F2ECFA",
+    color="#8A60B5"
+  ];
+  u_data [
+    label="Total data gas used\nstatic data + runtime BAL",
+    fillcolor="#FFF1E5",
+    color="#F58518"
+  ];
+  u_state [label="State gas used", fillcolor="#EAF6E8", color="#54A24B"];
+
+  equilibrium [
+    label="Three resource equilibria\ntarget clearing or\none-wei fee floor",
+    fillcolor="#F3F4F6",
+    color="#374151",
+    penwidth=1.5
+  ];
+
+  { rank=same; b_execution; b_data; b_state; }
+  { rank=same; p_execution; p_static; p_state; }
+  { rank=same; q_execution; g_static; q_state; }
+  { rank=same; u_execution; u_data; u_state; }
+
+  b_execution -> b_data [style=invis, weight=20];
+  b_data -> b_state [style=invis, weight=20];
+  p_execution -> p_static [style=invis, weight=20];
+  p_static -> p_state [style=invis, weight=20];
+  q_execution -> g_static [style=invis, weight=20];
+  g_static -> q_state [style=invis, weight=20];
+  u_execution -> u_data [style=invis, weight=20];
+  u_data -> u_state [style=invis, weight=20];
+
+  b_execution -> p_execution;
+  b_data -> p_execution [label="BAL data charge"];
+  b_data -> p_static;
+  b_data -> p_state [label="BAL data charge"];
+  b_state -> p_state;
+
+  p_execution -> q_execution;
+  p_static -> g_static;
+  p_state -> q_state;
+
+  q_execution -> u_execution;
+  q_execution -> g_bal;
+  q_state -> g_bal;
+  q_state -> u_state;
+  g_static -> u_data;
+  g_bal -> u_data;
+
+  u_execution -> equilibrium;
+  u_data -> equilibrium;
+  u_state -> equilibrium;
+}

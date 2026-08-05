@@ -52,9 +52,19 @@ def summarize_driven_replay(
             "mean_base_fee_wei": float(fee.mean()),
             "median_base_fee_wei": float(fee.median()),
             "p90_base_fee_wei": float(fee.quantile(0.90)),
+            "p99_base_fee_wei": float(fee.quantile(0.99)),
+            "maximum_base_fee_wei": float(fee.max()),
+            "base_fee_floor_fraction": float((fee == 1).mean()),
             "base_fee_log_return_std": volatility,
-            "mean_included_gas": float(
-                stationary[f"{resource}_included_gas"].mean()
+            "mean_included_gas": float(stationary[f"{resource}_included_gas"].mean()),
+            "p99_included_gas": float(
+                stationary[f"{resource}_included_gas"].quantile(0.99)
+            ),
+            "mean_target_fill": float(
+                (
+                    stationary[f"{resource}_included_gas"]
+                    / stationary[f"{resource}_gas_target"]
+                ).mean()
             ),
             "target_or_above_fraction": float(
                 (
@@ -67,17 +77,14 @@ def summarize_driven_replay(
                 if has_limit
                 else math.nan
             ),
-            "rationed_fraction": float(
-                stationary[f"{resource}_rationed"].mean()
-            ),
+            "rationed_fraction": float(stationary[f"{resource}_rationed"].mean()),
             "limit_hit_fraction": (
                 float(stationary[f"{resource}_limit_hit"].mean())
                 if has_limit
                 else math.nan
             ),
-            "mean_unserved_gas": float(
-                stationary[f"{resource}_unserved_gas"].mean()
-            ),
+            "mean_unserved_gas": float(stationary[f"{resource}_unserved_gas"].mean()),
+            "maximum_unserved_gas": float(stationary[f"{resource}_unserved_gas"].max()),
             "reserve_active_fraction": math.nan,
             "maximum_reserve_run_blocks": math.nan,
         }

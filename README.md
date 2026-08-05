@@ -62,12 +62,16 @@ Superseded reports and working notes are in `archived/markdowns/`.
 | Notebook | Purpose |
 |---|---|
 | `1.9-three-way-equilibrium-model.ipynb` | Solve the Glamsterdam bottleneck-resource equilibrium. |
-| `2.0-full-7999-equilibrium-model.ipynb` | Solve the coupled three-fee EIP-7999 equilibrium. |
-| `2.1-full-7999-driven-replay-scaffold.ipynb` | Initialize and exercise the dynamic replay scaffold. |
+| `2.4-bal-bundle-pricing-reference.ipynb` | Solve the supported BAL bundle-pricing equilibrium. |
+| `2.5-full-7999-bundle-priced-dynamic-replay.ipynb` | Run the supported bundle-priced EIP-7999 dynamic replay. |
 
 Notebooks `1.6` and `1.7` were intermediate aggregate-demand models. They have
 been superseded by notebooks `1.8` and `1.9` and moved to
 `archived/notebooks/`.
+
+Notebooks `2.0` through `2.2` preserve earlier full-EIP-7999 equilibrium and
+replay specifications. They have been superseded by notebooks `2.4` and `2.5`
+and moved to `archived/notebooks/`.
 
 ## Core Accounting Conventions
 
