@@ -1,6 +1,7 @@
 """Daily sampled-block calibration helpers.
 
-The daily accounting panel (notebook 1.1) is Xatu-only and cannot see
+The daily accounting panel reconstructed by publication notebook
+``resource_demand_and_glamsterdam_equilibrium/01`` is Xatu-only and cannot see
 access-list bytes, authorization tuples, BAL bytes, or exact new-account /
 delegation counts. This module calibrates those from deterministic daily
 block samples. The light path fetches:

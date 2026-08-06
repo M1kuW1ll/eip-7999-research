@@ -13,7 +13,11 @@ This report asks a capacity-design question: **for a given data target (target r
 
 
 
-The [resource-elasticity report](three_way_resource_elasticity_report.md) provides the independent isoelastic demand estimates. The [Glamsterdam equilibrium report](three_way_glamsterdam_equilibrium_report.md) provides the execution and state metering multipliers, and the [Data metering and BAL demand report](bundle_priced_bal_demand_model_report.md) provides the static-data meter, runtime-BAL anchor, BAL source decomposition, and parent-price construction.
+The [resource-demand and Glamsterdam report](demand_model_and_glamsterdam_analysis.md)
+provides the independent isoelastic demand estimates and the execution and state
+metering multipliers. The [data metering and BAL demand report](bundle_priced_bal_demand_model_report.md)
+provides the static-data meter, runtime-BAL anchor, BAL source decomposition,
+and parent-price construction.
 
 **Reference specification.** Unless stated otherwise, the report uses the 35-day elasticities,
 $\lambda=0$, $\rho_A=1$, a 75M state target, a fixed counterfactual 90M data limit, a one-wei
@@ -416,9 +420,6 @@ In the 15M scenario, the execution resource contributes approximately 1.54 wei a
 contributes 7,742 wei per historical execution-activity unit. The BAL charge therefore accounts for
 **99.98%** of the BAL-inclusive execution parent price.
 
-Relative to the no-feedback benchmark, data base fees fall by **36.5--61.8%**. Under feedback, the data
-charge reduces execution activity and the BAL it generates.
-
 Once execution reaches one wei, the data base fee determines realized execution. With state
 still at target, data clearing satisfies:
 
@@ -644,14 +645,12 @@ ranges from 89.8% under the 21-day estimate to 64.6% under the 75-day estimate.
 > Structural sensitivity to $\lambda$ and reduced-form access scaling $\rho_A$. The figure is retained
 > as a robustness diagnostic; the execution-clearing frontier is the primary design figure.
 
-The [archived notebook 2.3](../archived/notebooks/2.3-joint-composite-cost-equilibrium.ipynb)
-preserves a superseded transaction-class extension. Because its imposed class elasticities fail the
-historical aggregation check, it is excluded from the main evidence hierarchy.
-
 ## Appendix C: Reproducibility
 
-The executable calculation is in
-[notebook 2.4](../notebooks/2.4-bal-bundle-pricing-reference.ipynb). Its generated outputs include:
+The publication-facing calculation is in
+[the EIP-7999 equilibrium notebook](../notebooks/7999_equilibrium/03-bundle-priced-equilibrium.ipynb),
+after running the preceding data-metering and BAL-decomposition notebooks in
+the same folder. Its generated outputs include:
 
 - [paired equilibria](../data/bundle_pricing_paired_equilibria.csv);
 - [execution-floor boundary](../data/bundle_pricing_execution_frontier.csv);
@@ -661,8 +660,8 @@ The executable calculation is in
 - [dense capacity grid](../data/bundle_pricing_capacity_grid.csv); and
 - [full sensitivity grid](../data/bundle_pricing_sensitivity.csv).
 
-Notebook 2.4 verifies the runtime-BAL anchor identity, the interior incidence result, the invalid
-negative-fee interior solutions, the execution-target dropout property, and agreement between the
+Notebook 03 verifies the runtime-BAL anchor identity, the interior incidence result,
+the execution-target dropout property, and agreement between the
 analytic frontier and the joint numerical solver. For resource $i$, the complementarity residual is
 
 $$
