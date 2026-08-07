@@ -1,28 +1,29 @@
-# Data Metering and BAL Bundle Pricing Under EIP-7999
+# Data Metering, BAL Decomposition, and Bundle Pricing Under EIP-7999
 
-[EIP-7928](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7928.md) specifies Block-Level Access Lists (BALs) for Glamsterdam. Glamsterdam leaves BALs outside fee accounting. Under EIP-7999, BALs become part of the data resource and consume data gas. Transaction execution generates BAL through state creation and access to existing state.
+[EIP-7928](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7928.md) specifies Block-Level Access Lists (BALs) for Glamsterdam. Glamsterdam leaves BALs outside fee accounting. In the multi-dimensional fee market under EIP-7999, BALs become part of the data resource and consume data gas. Transactions generate runtime BAL through state creation and access to existing state.
 
-The fee model uses the transaction-local runtime byte counter specified by [EIP-8279](https://eips.ethereum.org/EIPS/eip-8279). We convert this counter and observed transaction content into the universal 16-data-gas-per-byte accounting assumed by this counterfactual extension. All empirical anchors use the 120 days from February 1 through May 31, 2026.
+This analysis builds upon an open [pull request on the EIP-7999 spec](https://github.com/ethereum/EIPs/pull/11835/changes/556e7170681be3401774b207ab3470d25bda63b5). The pull request adds the data and state resources used throughout this analysis, prices the data resource at `DATA_GAS_PER_CONTENT_BYTE = 16` over [EIP-8131](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-8131.md) static data content bytes and `DATA_GAS_PER_BAL_BYTE` over [EIP-8279](https://eips.ethereum.org/EIPS/eip-8279) runtime BAL bytes.
 
-At the historical anchor, runtime BAL is **47.4%** of total data gas. How it responds to the data fee therefore decides most of what the data market does, and it is the hardest response in the model to pin down, because BAL is the one resource nobody demands. This report meters the data resource, measures where BAL bytes come from, and then gives BAL a demand model derived from the price of the activity that produces it.
+We construct the runtime BAL counter and the static transaction data content, and convert them into the universal 16-data-gas-per-byte accounting assumed by this counterfactual extension. As in [the previous elasticity analysis](https://ethresear.ch/t/demand-model-with-elasticities-for-ethereum-state-data-and-execution-and-glamsterdam-fee-market-analysis/25644), all empirical anchors use the 120 days from February 1 through May 31, 2026.  
 
-The report covers metering and demand only. Equilibrium base fees under this model are solved separately, so the demand model can be reused without carrying one particular set of capacity scenarios with it.
+At the historical anchor, runtime BAL is 47.4% of total data gas. Therefore, how BAL responds to the data fee has a significant impact on the data fee market. It is challenging to pin down because BALs are not priced until EIP-7999.
 
-The main results are:
+In this analysis, we study the metering of static data components and runtime BAL under EIP-7999 gas accounting, measure where runtime BAL bytes come from, and then give BAL a "demand model" derived from the price of the activity that produces it.
 
-1. Static-data accounting, including calldata, transaction access lists, authorization tuples and their EIP-8279 static BAL entries, and blob-versioned hashes, is **2.133559 million data gas per block**, giving a metering multiplier of **1.807251** relative to current EIP-7623 data gas.
-2. The EIP-8279 runtime-meter anchor is **119,944 bytes per block**, or **1.919100 million data gas per block** at 16 data gas per runtime byte. Including it raises the data multiplier from 1.807251 to **3.432842**.
-3. The transaction-level reconstruction over 6,000 sampled blocks separates runtime BAL into **11.394%** matched directly to state creation, **37.879%** of access bytes co-produced by state-creating transactions, and **50.727%** produced by transactions with no observed state creation.
-4. Runtime-BAL demand is induced by parent execution and state activity, and its data charge enters
-   the price those activities pay. At $\lambda=0$, each historical unit of execution activity
-   produces $w_{\mathrm{execution}}=0.071023$ units of BAL data gas and each historical unit of state
-   activity produces $w_{\mathrm{state}}=0.041695$. BAL's response to the data fee follows from
-   the previously estimated parent elasticities applied to the BAL-inclusive parent prices.
-5. Relative to each resource's own metered charge, the BAL charge is **4.62%** of what execution pays but only **0.74%** of what state pays. The gap is EIP-8037 metering, which prices state gas at 5.66× against execution's 1.54×.
-6. The runtime decomposition measures the direct-state, co-produced, and non-state BAL shares. It
-   does not identify how co-produced access responds when execution and state prices move
-   independently. The central resource-based specification sets $\lambda=0$; values 0.5 and 1 are
-   retained as structural coupling sensitivities rather than estimated parameter values.
+The results presented in this post can be reproduced from [this repository](https://github.com/M1kuW1ll/eip-7999-research/tree/main/notebooks/7999_equilibrium).
+
+
+
+### Main results
+
+1. Static-data accounting — calldata, transaction access lists, authorization tuples with their EIP-8279 static BAL entries, and blob-versioned hashes — is **2.13 million data gas per block**, a metering multiplier of **1.807** on current EIP-7623 data gas.
+2. Over the 6,000-block sample the EIP-8279 runtime BAL meter anchors at approximately **119.9 kB per block**, or **1.92M data gas per block** at 16 data gas per byte. The transaction-level decomposition splits it into **11.4%** matched directly to state creation, **37.9%** access co-produced by state-creating transactions, and **50.7%** from transactions with no observed state creation.
+3. **BAL is economically closer to an access/execution externality than to an independently demanded data resource.** Based on the decomposition above, **88.6%** of BAL bytes is generated by access to existing state. Pricing BAL therefore mostly prices a byproduct of execution, not a resource users choose to consume.
+4. Assuming co-produced access follows execution demand entirely, each historical unit of execution activity produces $w_{\mathrm{execution}}=0.0710$ units of BAL data gas and each unit of state activity $w_{\mathrm{state}}=0.0417$. That is, each unit of metered execution gas produces 0.046 units of BAL data gas, and each unit of state gas produces 0.0074 units of BAL data gas. The gap is EIP-8037 repricing, which meters state creation at 5.66× against execution's 1.54×. BAL's response to the data fee then follows from the parent elasticities rather than from any parameter of its own.
+5. **In an illustrative fixed-parent-fee diagnostic, bundle pricing reduces total data demand by 0.24% at the anchor-equivalent data fee, 4.1% at 1 gwei, and 12.8% at 5 gwei** relative to the no-feedback specification. These are not equilibrium comparisons; execution and state base fees are held fixed while the data fee varies.
+
+
+
 
 ## Notation
 
@@ -34,7 +35,7 @@ The main results are:
 | Base fees | $b_{\mathrm{execution}}$, $b_{\mathrm{state}}$, $b_{\mathrm{data}}$ | Protocol base fees |
 | Parent prices | $P_{\mathrm{execution}}$, $P_{\mathrm{state}}$ | BAL-inclusive price of one historical unit of parent activity |
 | BAL intensities | $w_{\mathrm{execution}}(\lambda)$, $w_{\mathrm{state}}(\lambda)$ | Data gas mechanically produced per historical unit of parent activity |
-| BAL attribution | $\omega_{\mathrm{state-only}}$, $\omega_{\mathrm{coproduced}}$, $\omega_{\mathrm{nonstate}}$, $\lambda$ | Measured runtime-BAL shares and the maintained co-produced allocation assumption |
+| BAL attribution | $\omega_{\mathrm{state-only}}$, $\omega_{\mathrm{coproduced}}$, $\omega_{\mathrm{nonstate}}$, $\lambda$ | Measured runtime-BAL shares and the co-produced allocation |
 | Demand response | $\epsilon_{\mathrm{execution}}$, $\epsilon_{\mathrm{data}}$, $\epsilon_{\mathrm{state}}$ | Own-price elasticities |
 
 Superscript $0$ denotes the historical anchor.
@@ -62,20 +63,30 @@ $$
 
 where $k$ indexes blocks. Each internal `CREATE` or `CREATE2` counted by the runtime meter adds 28 bytes: 20 bytes for the new contract address and 8 bytes for its nonce. If the creation also transfers ETH to the new contract, the meter adds another 32 bytes for the contract's initial balance.
 
-We reconstruct transaction-level runtime BAL for 6,000 sampled blocks from February through May 2026, using 50 blocks per day. Daily sample means are weighted by the actual number of canonical blocks in each day.
+We reconstruct transaction-level runtime BAL for 6,000 sampled blocks from February through May 2026, using 50 blocks per day. Daily sample means are weighted by the actual number of canonical blocks in each day. Throughout this analysis, we assume a 16 gas per byte for runtime BAL bytes as the static data content, but the actual `DATA_GAS_PER_BAL_BYTE` is still TBD.
 
 | Priced BAL quantity at the historical anchor | Estimate |
 |---|---:|
 | EIP-8279 runtime counter | **119,944 bytes per block** |
-| EIP-7999 data gas at 16 gas per runtime byte | **1.9191M gas per block** |
-> Xatu's storage-diff table contains changes that remain after the transaction finishes. EIP-8279 retains a 32-byte meter charge when a reverted call temporarily changes a storage value; the final Xatu diff contains no corresponding entry. The reconstruction may therefore understate this specific source of runtime bytes.
+| EIP-7999 data gas at 16 gas per runtime byte | **1.919M gas per block** |
+> Xatu's storage-diff table contains changes that remain after the transaction finishes. EIP-8279 retains a 32-byte meter charge when a reverted call temporarily changes a storage value; the final Xatu diff contains no corresponding entry. The reconstruction may therefore understate this specific source of runtime bytes. 
 
-EIP-8279 includes the runtime BAL counter in the transaction floor at 64 gas per byte. Under the EIP-7999 counterfactual, runtime BAL becomes a data-resource component. In this report, we assume 16 data gas per runtime byte; the final protocol value remains to be specified.
+#### What the runtime counter measures
+
+The EIP-8279 counter is transaction-level, and it is not the size of the encoded block-level access list. Two differences run in opposite directions:
+
+- It **overstates** the entries it does cover, because it applies no block-level deduplication. When several transactions in a block touch the same account or storage slot, the counter charges each transaction separately, while the encoded BAL stores that address once.
+- It **understates** the payload as a whole, because mandatory per-transaction BAL entries are carried by `TX_BASE` and the static floor rather than by the runtime counter, and because the counter models entry contents rather than the RLP framing that surrounds them in the encoded list.
+
+Measured together, the second effect dominates. We construct the RLP-encoded BAL object using [Toni's analysis](https://github.com/nerolation/eth-bal-analysis) and compare with runtime BAL counter over a sample of 2,000 blocks. On average, the encoded BAL is 134,111 bytes per block against a runtime counter of 120,798, so the runtime counter is **~90%** of the physical encoded size.
+
+The two quantities serve different purposes. The runtime counter is what transactions are charged for: it is the metered quantity that enters the data gas. The encoded BAL object is what actually propagates with the payload, so it is what a data gas limit needs to be calibrated against. In this analysis, we focus on the pricing side.
+
 
 
 ## Static-data metering in the EIP-7999 counterfactual
 
-The current EIP-7999 draft removes the EIP-7623 floor while retaining calldata tokens, equivalent to 4 gas per zero byte and 16 per nonzero byte. This project's broader EIP-8131/EIP-8279-style bandwidth counterfactual instead meters every encoded byte at 16 gas and adds the specified static-data fields. The accounting bridge below reports both steps so that the broader counterfactual is not attributed to the base EIP-7999 draft.
+EIP-7999 also applies a `DATA_GAS_PER_CONTENT_BYTE = 16` to static transaction data byte specified by EIP-8131, and brings calldata, access-list contents, authorization tuples, blob-versioned hashes into the same data resource. The accounting bridge below walks from current rules through EIP-7999 data gas accounting rule, so each step can be attributed to the rule that produces it.
 
 Let $q_{\mathrm{data}}^0$ be current EIP-7623 data gas and let $g_{\mathrm{static}}^0$ be the gas assigned to the same static transaction content under the EIP-7999 counterfactual. The static-data metering multiplier is:
 
@@ -84,24 +95,24 @@ m_{\mathrm{data,static}}
 =\frac{g_{\mathrm{static}}^0}{q_{\mathrm{data}}^0}.
 $$
 
-The current anchor is $q_{\mathrm{data}}^0=1.180555$M gas per block. Removing the EIP-7623 floor while retaining 4/16 calldata, as in the current EIP-7999 draft, reduces the same transaction content to 1.032928M gas per block. The counterfactual then meters every calldata byte at 16 data gas and adds access-list content bytes, authorization tuples, and blob-versioned hashes. EIP-8279 also adds 51 static BAL bytes for every authorization: 20 bytes for the authority address, 23 for its delegation code, and 8 for its nonce. These bytes are part of the static authorization charge rather than the runtime BAL counter.
+The current anchor is $q_{\mathrm{data}}^0=1.181$M gas per block. Removing the EIP-7623 floor while retaining 4/16 calldata, as in the published draft, reduces the same transaction content to 1.033M gas per block. The counterfactual then meters every calldata byte at 16 data gas and adds access-list content bytes, authorization tuples, and blob-versioned hashes. EIP-8279 also adds 51 static BAL bytes for every authorization: 20 bytes for the authority address, 23 for its delegation code, and 8 for its nonce. These bytes are part of the static authorization charge rather than the runtime BAL counter.
 
-| Accounting step | Data gas per block | Change from previous step | Ratio to current EIP-7623 |
-|---|---:|---:|---:|
-| Current EIP-7623: 4/16 calldata plus floor uplift | 1.180555M | — | 1.000000 |
-| Remove EIP-7623 floor; retain 4/16 calldata | 1.032928M | −0.147627M | 0.874952 |
-| Meter every calldata byte at 16 gas | 2.008813M | +0.975884M | 1.701583 |
-| Add sampled access-list bytes | 2.100737M | +0.091924M | 1.779448 |
-| Add sampled authorization-tuple bytes | 2.121778M | +0.021042M | 1.797272 |
-| Add 51 static BAL bytes per authorization | 2.131715M | +0.009936M | 1.805688 |
-| Add 32-byte blob-versioned hashes | **2.133559M** | **+0.001844M** | **1.807251** |
+| Accounting step | Specified by | Data gas per block | Change from previous step | Ratio to current EIP-7623 |
+|---|---|---:|---:|---:|
+| Current EIP-7623: 4/16 calldata plus floor uplift | Current rules | 1.181M | — | 1.000 |
+| Remove EIP-7623 floor; retain 4/16 calldata | Published EIP-7999 draft | 1.033M | −0.148M | 0.875 |
+| Meter every calldata byte at 16 gas | PR #11835 | 2.009M | +0.976M | 1.702 |
+| Add sampled access-list bytes | PR #11835 | 2.101M | +0.092M | 1.779 |
+| Add sampled authorization-tuple bytes | PR #11835 | 2.122M | +0.021M | 1.797 |
+| Add 51 static BAL bytes per authorization | PR #11835 | 2.132M | +0.010M | 1.806 |
+| Add 32-byte blob-versioned hashes | PR #11835 | **2.134M** | **+0.002M** | **1.807** |
 
 The static-data metering multiplier is therefore:
 
 $$
 m_{\mathrm{data,static}}
-=\frac{2.133559}{1.180555}
-=1.807251.
+=\frac{2.134}{1.181}
+=1.807.
 $$
 
 The static component uses the independently estimated historical data elasticity. Its effective price ratio is:
@@ -121,119 +132,172 @@ g_{\mathrm{static}}(b_{\mathrm{data}})
 =g_{\mathrm{static}}^0
 r_{\mathrm{data}}(b_{\mathrm{data}})^{-\epsilon_{\mathrm{data}}},
 \qquad
-g_{\mathrm{static}}^0=2.133559\text{M},
+g_{\mathrm{static}}^0=2.134\text{M},
 \qquad
-\epsilon_{\mathrm{data}}=0.229476.
+\epsilon_{\mathrm{data}}\approx0.229.
 $$
 
 ![daily_data_resource_components_runtime_8279_2026-02-01_2026-06-01](https://hackmd.io/_uploads/r1k86tI4Me.png)
 
-> Total data byte composition at the historical anchor under EIP-7999.
+> Total data resource byte composition at the historical anchor under EIP-7999.
+
+### 64 gas per byte transaction floor vs. 16 gas per byte data gas
+
+In EIP-8131 and EIP-8279, static transaction bytes data and runtime BAL bytes are charged 64 gas per byte in the transaction floor. This ensures that, under the one-dimensional fee market, the calldata/BAL-heavy transactions are not underpriced when their execution cost is small, and that the payload size is safe to be propagated if all the gas are used to expand the payload size.
+
+Under EIP-7999, the data resource has its own dimension and pricing mechanism with an individual base fee and target. Therefore, the `DATA_GAS_PER_CONTENT_BYTE = 16` is the price of one byte in the separated data resource dimension. It no longer needs to be defended through the execution charge, and the worst-case payload size will be controlled by the data gas limit. 
 
 ## Separating BAL bytes between state creation and execution
 
-BAL gas is a weighted combination of execution and state demand responses, with an additional unidentified response to the data price.
+BAL bytes are generated by persistent state creation and by access to existing state. A state-creating transaction often performs both activities: it may read existing accounts and storage slots while also creating a new account, slot, or contract code. We therefore divide runtime-metered BAL into three components. Because all three are converted at 16 data gas per runtime byte, their shares are identical whether measured in runtime bytes or data gas:
 
-An important note is that a state-creating transaction also reads and modifies existing state. For example, a transaction may read existing slots before it creates a new slot. For such a transaction, the BAL bytes it creates can be related to both state creation and execution. **Therefore, the question is whether these execution-related BAL bytes of a state-creating transaction should respond to state demand or execution demand.**
+- $g_{\mathrm{state-only}}^0$: data gas from bytes directly associated with persistent state creation;
+- $g_{\mathrm{coproduced}}^0$: data gas from access-related bytes generated by transactions that also create state; and
+- $g_{\mathrm{nonstate}}^0$: data gas from bytes generated by transactions with no observed state creation.
 
-This question concerns the parent-activity term $\widetilde g_{\mathrm{BAL}}$ and is therefore common to both models; the data-fee response is applied afterwards. One step further from state and execution, that term decomposes into three parts:
-
-$$
-\widetilde g_{\mathrm{BAL}}
-=\widetilde g_{\mathrm{state-only}}
-+\widetilde g_{\mathrm{coproduced}}
-+\widetilde g_{\mathrm{nonstate}}.
-$$
-
-- $\widetilde g_{\mathrm{state-only}}$ is the BAL from state-creation activity that responds only to state demand, e.g., new storage slots, new accounts, or deployed code.
-- $\widetilde g_{\mathrm{coproduced}}$ is the BAL from state-access (execution) activity that is related to state-creating transactions.
-- $\widetilde g_{\mathrm{nonstate}}$ is the BAL from non-state-creation activity that responds only to execution demand.
-
-Let $\lambda \in [0, 1]$ be a parameter that determines the fraction of the coproduced BAL gas responds to state demand, and $1-\lambda$ is the fraction of coproduced BAL gas responds to execution demand. Therefore, a richer model of BAL demand can be:
+At the historical anchor,
 
 $$
-\begin{align}
-\frac{\widetilde g_{\mathrm{BAL}}}
-{g_{\mathrm{BAL}}^0} = &
-\;\omega_{\mathrm{state-only}}
-r_{\mathrm{state}}(b_{\mathrm{state}})^{-\epsilon_{\mathrm{state}}}
-\\ & +\omega_{\mathrm{coproduced}}[\lambda r_{\mathrm{state}}(b_{\mathrm{state}})^{-\epsilon_{\mathrm{state}}} + (1-\lambda)r_{\mathrm{execution}}
-(b_{\mathrm{execution}})^{-\epsilon_{\mathrm{execution}}}]
-\\ & +\omega_{\mathrm{nonstate}} r_{\mathrm{execution}}
-(b_{\mathrm{execution}})^{-\epsilon_{\mathrm{execution}}}.
-\end{align}
+g_{\mathrm{BAL}}^0
+=g_{\mathrm{state-only}}^0
++g_{\mathrm{coproduced}}^0
++g_{\mathrm{nonstate}}^0,
 $$
 
+with component shares
 
+$$
+\omega_k=\frac{g_k^0}{g_{\mathrm{BAL}}^0},
+\qquad
+\omega_{\mathrm{state-only}}
++\omega_{\mathrm{coproduced}}
++\omega_{\mathrm{nonstate}}=1.
+$$
 
-The $\omega$ shares are measured directly from the decomposition; only their behavioral routing $\lambda$ is unresolved.
+The decomposition measures the three shares directly. Projecting co-produced BAL requires an allocation assumption because these bytes arise from access activity inside state-creating transactions. Define the realized activity ratios
+
+$$
+R_{\mathrm{state}}
+=\frac{q_{\mathrm{state}}}{q_{\mathrm{state}}^0},
+\qquad
+R_A=\frac{A}{A^0},
+$$
+
+where $A$ denotes existing-state access activity. Access activity is not separately observed. The historical panel contains no independently priced state-access quantity, so we proxy it with total execution activity. Writing $R_{\mathrm{execution}}=q_{\mathrm{execution}}/q_{\mathrm{execution}}^0$,
+
+$$
+R_A=R_{\mathrm{execution}}^{\rho_A}.
+$$
+
+The central case sets $\rho_A=1$, which holds access intensity constant as execution scales. The sensitivity values $\rho_A=0.75$ and $1.25$ let that intensity fall or rise with execution. All three pass through the same historical BAL anchor, because $R_{\mathrm{execution}}=1$ there.
+
+Let $\lambda\in[0,1]$ assign a fraction $\lambda$ of co-produced BAL to state activity and the remaining fraction $1-\lambda$ to access activity. Realized BAL then satisfies
+
+$$
+\begin{aligned}
+\frac{g_{\mathrm{BAL}}}{g_{\mathrm{BAL}}^0}
+={}&\omega_{\mathrm{state-only}}R_{\mathrm{state}} \\
+&+\omega_{\mathrm{coproduced}}
+\left[\lambda R_{\mathrm{state}}+(1-\lambda)R_A\right] \\
+&+\omega_{\mathrm{nonstate}}R_A.
+\end{aligned}
+$$
+
+Equivalently,
+
+$$
+\frac{g_{\mathrm{BAL}}}{g_{\mathrm{BAL}}^0}
+=\omega_{\mathrm{state}}(\lambda)R_{\mathrm{state}}
++\omega_{\mathrm{execution}}(\lambda)R_A,
+$$
+
+where
+
+$$
+\omega_{\mathrm{state}}(\lambda)
+=\omega_{\mathrm{state-only}}
++\lambda\omega_{\mathrm{coproduced}},
+\qquad
+\omega_{\mathrm{execution}}(\lambda)
+=\omega_{\mathrm{nonstate}}
++(1-\lambda)\omega_{\mathrm{coproduced}}.
+$$
+
+This relationship maps realized parent activity into runtime BAL gas. The bundle-priced model below determines the activity ratios after including the BAL data charge in the execution and state parent prices.
 
 By decomposing the 6,000 sampled blocks, we get the following results:
 
 | Runtime-meter group | Runtime BAL bytes | Share of runtime BAL |
 |---|---:|---:|
-| state creation | 81.997M | $\omega_{\mathrm{state-only}} = 11.394\%$|
+| State creation | 81.997M | $\omega_{\mathrm{state-only}} = 11.394\%$ |
 | Co-produced access in state-creating transactions | 272.603M | $\omega_{\mathrm{coproduced}} = 37.879\%$ |
-| non-state execution | 365.066M | $\omega_{\mathrm{nonstate}} = 50.727\%$ |
+| Non-state execution | 365.066M | $\omega_{\mathrm{nonstate}} = 50.727\%$ |
 | **Total** | **719.666M** | **100.000%** |
 
->The co-produced group measures BAL bytes created by storage and account access that the transaction performs alongside state creation.
+> The co-produced group measures BAL bytes created by storage and account access that the transaction performs alongside state creation. Resampling blocks within each day gives sampling standard errors of 0.14, 0.14, and 0.18 percentage points on the three shares, so the sample size is not what limits them. The attribution assumptions described above are the binding constraint.
 
 ![bal_runtime_8279_three_way_components_2026-02-01_2026-06-01](https://hackmd.io/_uploads/rk8CMUC4Gx.png)
+
 > Runtime-meter components across the 6,000-block panel. The first panel reports each component's contribution to total BAL bytes. The second separates direct state creation, co-produced access in state-creating transactions, and bytes from transactions with no observed state creation.
+
+**What this says about BAL.** Only 11.4% of runtime BAL is directly attributable to state creation. The remaining 88.6% is generated by access/execution activity not directly matched to persistent state creation. Under EIP-7999, the BAL charge lands on the data resource, but what it is actually pricing is overwhelmingly a byproduct of execution, not a resource that users demand and size for themselves.
+
+This is the reason the model that follows gives BAL no demand curve of its own and instead attaches its charge to the price of the parent activity. It also sets expectations for the equilibrium: because BAL is produced mostly by execution, the data fee imposes a constrain on execution through a channel that did not exist before EIP-7999, and the data dimension inherits execution's price response rather than expressing one of its own. This is the takeaway we carry into the next stage of the modeling.
+
 
 ### Co-produced access inside state-creating transactions
 
-The allocation parameter $\lambda$ determines how the co-produced component is routed:
+The counterfactual analysis considers three allocations:
 
-- $\lambda=0$ attaches co-produced access to execution/access activity;
-- $\lambda=1$ attaches it to state activity; and
-- $\lambda=0.5$ is an intermediate structural sensitivity.
+- $\lambda=0$ assigns all co-produced access to execution/access activity;
+- $\lambda=0.5$ divides it equally between state and execution/access activity; and
+- $\lambda=1$ assigns all co-produced access to state activity.
 
-The central resource-based specification sets $\lambda=0$. Runtime bytes directly matched to state
-creation follow state activity, while access-related BAL remains attached to the execution/access
-activity in which it is generated. This convention is consistent with the independent resource
-demand curves used throughout the analysis. The runtime decomposition identifies the three
-$\omega$ shares, but it does not estimate $\lambda$.
+The central specification sets $\lambda=0$. Direct state-creation bytes follow state activity, while access-related bytes follow the execution/access activity in which they are generated. This resource-based allocation is consistent with the independent demand curves used for execution and state elsewhere in the analysis. The values $\lambda=0.5$ and $1$ provide structural sensitivities for stronger coupling between state-creating transactions and their co-produced access.
+
+At fixed realized activity ratios, the effect of the allocation is
+
+$$
+\frac{\partial(g_{\mathrm{BAL}}/g_{\mathrm{BAL}}^0)}{\partial\lambda}
+=\omega_{\mathrm{coproduced}}(R_{\mathrm{state}}-R_A).
+$$
+
+As we plan to scale execution gas target much more than the state gas target from the anchor, assuming state access intensity scales (super-)proportionally as execution scales (i.e., $\rho_A \ge 1$), state access expands faster than state creation $R_A>R_{\mathrm{state}}$. Therefore, $\lambda = 0$ places the most BAL pressure on the data resource. This is important in future EIP-7999 equilibrium analysis: if a data target is feasible and there exists a data equilibrium under $\lambda = 0$, there exists a data equilibrium under $\lambda > 0$.
+
+Sub-proportional access scaling is the exception. At $\rho_A=0.75$, access expands more slowly than state creation at the lower execution targets, and the ordering reverses. We keep $\rho_A=0.75$ as a sensitivity.
+
 
 ## BAL demand model
 
 ### Why BAL cannot have a demand curve of its own
 
-For every other resource, the user can decide how much the transaction consumes, e.g., calldata, compute, and state. Runtime BAL is different because it is assembled by the protocol from accounts and slots a transaction touches. The user does not request it, and cannot buy less of it without doing less of BAL creating activity.
+A tempting alternative is to give BAL an independent isoelastic demand curve in the data fee, analogous to static calldata. That specification is problematic for two reasons. First, once parent execution and state activity are held fixed, a lower data fee mechanically expands BAL even though BAL is not independently chosen. Second, it omits the reverse channel through which an expensive BAL charge can suppress the execution and state activity that generates it.
 
-This also removes the usual way of estimating a response. The demand curves in this study come from the three 2025 gas-limit changes, which moved the shared base fee and let us watch quantities react. BAL carried no per-byte fee then, so there is no price variation in the historical record from which to recover a BAL demand curve. Its charge is genuinely new until introduced by EIP-7999.
+Runtime BAL is assembled by the protocol from the accounts and storage slots touched during execution. Users cannot reduce it independently; they must reduce or change the parent activity that creates it. The appropriate demand object is therefore the parent execution or state activity, evaluated at a price that includes its BAL charge.
 
-The way through is to stop treating BAL as something that is demanded. Consider the following toy example: A customer goes to a restaurant because they value the food. However, eating the meal also creates serving work, so the final bill includes both the menu price and a mandatory service charge. The customer decides whether to order based on the total bill. If the service charge rises enough, some customers stop ordering; both the meal and its associated service work disappear.
-
-Similarly, BAL bytes appear because of its parent execution and state activity. If a user undertakes $q$ units of execution activity and that mechanically produces $w\,q$ units of BAL data gas, then under EIP-7999 the user pays $m_{\mathrm{execution}}b_{\mathrm{execution}}q$ on execution and $w\,b_{\mathrm{data}}q$ on data. Only the total fee enters the decision of whether to transact. So BAL needs no demand curve of its own — the price of its parents simply has a second term in it.
+Concretely, if a user undertakes $q$ units of execution activity and that mechanically produces $w\,q$ units of BAL data gas, then under EIP-7999 the user pays $m_{\mathrm{execution}}b_{\mathrm{execution}}q$ on execution and $w\,b_{\mathrm{data}}q$ on data. Only the total fee enters the decision of whether to transact. So BAL needs no demand curve of its own — the price of its parents simply has a second term in it.
 
 
-### BAL Intensities
+### BAL intensities
 
 The measured attribution converts into data gas produced per historical unit of parent activity:
 
 $$
-w_{\mathrm{e}}(\lambda)=\frac{\omega_{\mathrm{execution}}(\lambda)\,g_{\mathrm{BAL}}^0}{q_{\mathrm{e}}^0},
+w_{\mathrm{execution}}(\lambda)=\frac{\omega_{\mathrm{execution}}(\lambda)\,g_{\mathrm{BAL}}^0}{q_{\mathrm{execution}}^0},
 \qquad
-w_{\mathrm{s}}(\lambda)=\frac{\omega_{\mathrm{state}}(\lambda)\,g_{\mathrm{BAL}}^0}{q_{\mathrm{s}}^0},
+w_{\mathrm{state}}(\lambda)=\frac{\omega_{\mathrm{state}}(\lambda)\,g_{\mathrm{BAL}}^0}{q_{\mathrm{state}}^0},
 $$
 
-with $\omega_{\mathrm{state}}=\omega_{\mathrm{state-only}}+\lambda \omega_{\mathrm{coproduced}}$ and $\omega_{\mathrm{execution}}=\omega_{\mathrm{nonstate}}+(1-\lambda)\omega_{\mathrm{coproduced}}$.
+with $\omega_{\mathrm{state}}(\lambda)=\omega_{\mathrm{state-only}}+\lambda \omega_{\mathrm{coproduced}}$ and $\omega_{\mathrm{execution}}(\lambda)=\omega_{\mathrm{nonstate}}+(1-\lambda)\omega_{\mathrm{coproduced}}$.
 
-| $\lambda$ | $w_{\mathrm{e}}$ | $w_{\mathrm{s}}$ | $w_{\mathrm{e}}/m_{\mathrm{e}}$ |
-|---:|---:|---:|---:|
-| **0** | **0.071023** | **0.041695** | **0.046182** |
-| 0.5 | 0.055842 | 0.111005 | 0.036310 |
-| 1 | 0.040661 | 0.180314 | 0.026439 |
+| $\lambda$ | $w_{\mathrm{execution}}$ | $w_{\mathrm{state}}$ | $w_{\mathrm{execution}}/m_{\mathrm{execution}}$ | $w_{\mathrm{state}}/m_{\mathrm{state}}$ |
+|---:|---:|---:|---:|---:|
+| **0** | **0.0710** | **0.0417** | **0.0462** | **0.0074** |
+| 0.5 | 0.0558 | 0.1110 | 0.0363 | 0.0196 |
+| 1 | 0.0407 | 0.1803 | 0.0264 | 0.0319 |
 
-Let $R_{\mathrm{execution}}=q_{\mathrm{execution}}/q_{\mathrm{execution}}^0$. Existing-state access is approximated by:
 
-$$
-\frac{A}{A^0}=R_{\mathrm{execution}}^{\rho_A}.
-$$
-
-The execution-linked BAL component and its average intensity are therefore:
+Carrying the access proxy $R_A=R_{\mathrm{execution}}^{\rho_A}$ through, the execution-linked BAL component and its average intensity are:
 
 $$
 g_{\mathrm{BAL,execution}}
@@ -244,15 +308,13 @@ R_{\mathrm{execution}}^{\rho_A},
 =w_{\mathrm{execution}}R_{\mathrm{execution}}^{\rho_A-1}.
 $$
 
-The central case sets $\rho_A=1$, which keeps access intensity constant as execution scales. The sensitivity values $\rho_A=0.75$ and $1.25$ allow the intensity to fall or rise. All three specifications pass through the same historical BAL anchor because $R_{\mathrm{execution}}=1$ there.
+The bundle price uses the average intensity $\bar w_{\mathrm{execution}}$. This matches the aggregate demand index and the observed average BAL per historical execution unit, and it preserves the measured anchor charge for every $\rho_A$.
 
-The BAL-inclusive execution price uses the average intensity
-$\bar w_{\mathrm{execution}}$. This matches the aggregate demand index and the observed average BAL
-per historical execution unit, and it preserves the measured anchor charge for every $\rho_A$.
+Expressed per unit of metered EIP-7999 gas rather than per historical unit, the intensities become $w_{\mathrm{execution}}/m_{\mathrm{execution}}=0.046$ and $w_{\mathrm{state}}/m_{\mathrm{state}}=0.0074$ at $\lambda=0$. Each unit of metered execution gas produces approximately 0.046 units of BAL data gas, and each unit of metered state gas approximately 0.0074.
 
-Expressed per unit of metered EIP-7999 execution gas rather than per historical unit, $w_{\mathrm{execution}}/m_{\mathrm{execution}}=0.0462$ at $\lambda=0$: each additional unit of execution gas brings 4.6% of a unit of BAL data gas with it.
+Both are gas quantity ratios. They describe how much BAL data gas each unit of parent gas mechanically drags along, not what fraction of the parent's fee the BAL charge represents; converting them into a fee ratio requires multiplying by $b_{\mathrm{data}}/b_{\mathrm{execution}}$ or $b_{\mathrm{data}}/b_{\mathrm{state}}$, which the equilibrium determines.
 
-The two intensities differ far more than the attribution shares alone suggest, because they are divided by different anchors. Relative to each resource's own metered charge, BAL is **4.62%** of what execution pays but only **0.74%** of what state pays. The gap is EIP-8037 metering, which prices state gas at 5.66× against execution's 1.54×: creating state is expensive in gas, and the accesses that accompany it are not.
+The two intensities differ far more than the attribution shares alone suggest, because they are divided by different anchors. The gap is EIP-8037 repricing, which meters state creation at 5.66× against execution's 1.54×: creating state is expensive in gas, and the accesses that accompany it are not, so the same BAL bytes are spread over a much larger metered state base.
 
 
 ### BAL-inclusive parent prices
@@ -261,7 +323,7 @@ Each parent activity is priced at its own metered charge plus the average BAL ch
 
 $$
 P_{\mathrm{execution}}
-=m_{\mathrm{execution}}b_{\mathrm{execution}}+w_{\mathrm{execution}}b_{\mathrm{data}},
+=m_{\mathrm{execution}}b_{\mathrm{execution}}+\bar w_{\mathrm{execution}}b_{\mathrm{data}},
 \qquad
 P_{\mathrm{state}}
 =m_{\mathrm{state}}b_{\mathrm{state}}+w_{\mathrm{state}}b_{\mathrm{data}} .
@@ -269,9 +331,7 @@ $$
 
 Static transaction content keeps its own price, $m_{\mathrm{data,static}}b_{\mathrm{data}}$.
 
-These are **BAL-inclusive parent prices**. Their scope covers the parent-resource charge and assigned
-runtime-BAL charge. Static data carried by the same transactions and execution gas carried by
-state-creating transactions remain outside them.
+These are **BAL-inclusive parent prices**, not complete transaction-composite prices. The static data carried by the same transactions, and the execution gas carried by state-creating transactions, remain outside them.
 
 ### The demand curves
 
@@ -305,10 +365,7 @@ R_{\mathrm{execution}}
 \right]^{-\epsilon_{\mathrm{execution}}}.
 $$
 
-A higher $b_{\mathrm{data}}$ raises both parent prices, reduces parent activity, and thereby reduces BAL
-without introducing a separate BAL own-price elasticity that history cannot identify. BAL is
-calculated from realized activity, so it also remains internally consistent when a resource
-underfills its configured target.
+A higher $b_{\mathrm{data}}$ raises both parent prices, reduces parent activity, and thereby reduces BAL without introducing a separate BAL own-price elasticity. BAL is calculated from the realized activity rather than the capacity target, so it remains consistent when a resource underfills.
 
 Total data gas is the sum of the two components:
 
@@ -321,77 +378,123 @@ $$
 
 Because the parent quantities depend on $b_{\mathrm{execution}}$ and $b_{\mathrm{state}}$ as well as $b_{\mathrm{data}}$, data demand is no longer a function of the data fee alone. Any equilibrium built on this model has to solve the three fees simultaneously.
 
+### Why the estimated resource elasticities apply to these prices
 
-### Why the estimated elasticities apply to these prices
-
-The model's central behavioral assumption applies the execution and state elasticities to responses
-in BAL-inclusive parent prices. The elasticities were recovered from the 2025 gas-limit events,
-which moved a single shared fee: execution, data, and state prices never varied independently, and
-BAL carried no charge. Those events therefore identify the response to a proportional change in
-overall parent cost; they do not separately identify responses to each fee component.
+The model's central behavioral assumption is that the estimated execution and state elasticities apply to activity responses to BAL-inclusive parent prices. The elasticities were recovered from the 2025 gas-limit events, which moved a single shared fee: execution, data, and state prices never varied independently, and BAL carried no charge at all. Those events therefore identify how activity responds to a proportional change in its total cost, not how it responds to each fee separately.
 
 We interpret the recovered execution and state elasticities as responses to the effective price of the underlying activity. Under EIP-7999 that effective price includes the newly charged BAL footprint, so applying the historical elasticities to BAL-inclusive parent prices is our preferred way of carrying the estimates into the counterfactual. It is not identified by historical variation in separate execution and data fees, and it assumes the response depends on the total price rather than on how that total is split across fee lines.
 
-This is the same logic already used for the metering multipliers. $m_i$ converts a base fee into the effective price of historical activity; the BAL term adds the second fee line to that same effective price. Leaving it out would assume users respond to their execution charge and ignore the BAL charge entirely, which is a stronger thing to believe about a cost appearing on the same fee.
+This is the same logic already used for the metering multipliers. $m_i$ converts a base fee into the effective price of historical activity; the BAL adds another component to that same effective price. Leaving it out would assume users respond to their execution charge and ignore the BAL charge entirely, which is a stronger thing to believe about a cost appearing on the same fee.
+
+## The BAL bundle pricing feedback
+
+The feedback from BAL pricing to data demand is easier to evaluate with a quantitative example. A higher data base fee directly reduces static-data demand, but it also raises the BAL-inclusive prices of execution and state activity. Parent activity then contracts, less runtime BAL is generated, and total data demand falls further:
+
+$$
+b_{\mathrm{data}}\uparrow
+\;\Longrightarrow\;
+P_{\mathrm{execution}},P_{\mathrm{state}}\uparrow
+\;\Longrightarrow\;
+q_{\mathrm{execution}},q_{\mathrm{state}}\downarrow
+\;\Longrightarrow\;
+g_{\mathrm{BAL}}\downarrow
+\;\Longrightarrow\;
+g_{\mathrm{data}}\downarrow.
+$$
+
+To isolate this second channel, we hold the execution and state base fees fixed at their anchor-equivalent values,
+
+$$
+b_{\mathrm{execution}}=\frac{p^0}{m_{\mathrm{execution}}},
+\qquad
+b_{\mathrm{state}}=\frac{p^0}{m_{\mathrm{state}}}.
+$$
+
+and vary only the data base fee. This is an illustrative partial-equilibrium diagnostic rather than a solved EIP-7999 equilibrium.
+
+The figure compares two specifications. In the no-feedback benchmark, parent demand ignores the BAL charge, so runtime BAL remains fixed at $g_{\mathrm{BAL}}^0$ and only static-data demand responds to $b_{\mathrm{data}}$. In the bundle-priced model, the BAL charge enters both parent prices, reducing execution and state activity and therefore the runtime BAL they generate.
+
+![bal_data_demand_response_2026-02-01_2026-06-01](https://hackmd.io/_uploads/SJh7fO7IMe.png)
+
+> **Illustrative partial-equilibrium response.** Execution and state base fees are held fixed at their anchor-equivalent values while the data base fee varies. 
+Left: static data, runtime BAL, and total data demand under the no-feedback and bundle-priced specifications. The shaded area is the reduction caused by BAL-price feedback. 
+Right: the reduction in total data demand under alternative $\lambda$ and $\rho_A$ assumptions. The dotted line marks the anchor-equivalent static-data fee $b_{\mathrm{data}}^0$. These curves isolate the feedback channel and are not solved three-fee equilibrium paths.
+
+
+At the anchor-equivalent static-data fee $b^0_{\mathrm{data}}$, bundle pricing reduces total data demand by only 0.24%. The effect is not exactly zero because the individual fee anchors are accounting references rather than an EIP-7999 equilibrium: introducing BAL pricing adds a positive charge to execution and state even when their own base fees remain at their anchor-equivalent values.
+
+The feedback grows as the data fee rises. Relative to the no-feedback specification, total data demand is 4.1% lower at 1 gwei, 12.8% lower at 5 gwei, and 23.4% lower at 20 gwei. At 5 gwei, runtime BAL falls from 1.92M to approximately 1.57M data gas per block. Thus, the feedback is small near the anchor but becomes material at the higher data-fee levels shown. This is why the full equilibrium must solve execution, data, and state fees jointly rather than clearing the data dimension independently.
+
+The sensitivity panel shows which assumptions drive this effect. Increasing $\lambda$ routes more co-produced BAL through state, whose estimated elasticity is larger than execution’s, and therefore strengthens the response. At 5 gwei, the reduction in total data demand is 12.8% at $\lambda=0$, 17.1% at $\lambda=0.5$, and 23.0% at $\lambda=1$. Varying $\rho_A$ from 0.75 to 1.25 has a smaller effect, producing reductions between 10.6% and 14.9%.
+
+Thus, $\lambda=0$ is conservative for the size of this isolated price-feedback effect. This does not conflict with the companion equilibrium result that $\lambda=0$ can produce the largest level of BAL demand in the tested capacity configurations. The first comparison depends on which parent is more price-responsive; the second depends on which parent activity expands more at equilibrium.
 
 ## Limitations
 
-**The BAL-inclusive parent prices remain aggregate.** $P_{\mathrm{execution}}$ and
-$P_{\mathrm{state}}$ include the average BAL charge generated by each parent activity. Static data
-carried by the same transactions remains on its own demand curve, and the model does not require
-every resource used by a transaction to enter or exit together. This treatment is consistent with
-the aggregate elasticities estimated in the earlier analysis, but it does not model changes in
-transaction composition.
+**The bundle prices remain aggregate.** $P_{\mathrm{execution}}$ and $P_{\mathrm{state}}$ include the average BAL charge generated by each parent activity. Static data carried by the same transactions remains on its own demand curve, and the model does not require every resource used by a transaction to enter or exit together. This treatment is consistent with the aggregate elasticities estimated in the earlier analysis, but it does not model changes in transaction composition.
 
-**Allocation of co-produced BAL.** The transaction-level decomposition measures the amount of runtime
-BAL directly matched to state creation, co-produced alongside state creation, and generated by
-transactions with no observed state creation. It does not identify how the co-produced component
-would scale when execution and state prices vary independently. The reference specification sets
-$\lambda=0$, assigning co-produced access to the execution/access parent activity, and uses
-$\lambda\in\{0,0.5,1\}$ as a sensitivity range. These values represent alternative behavioral
-allocations and carry no estimated-probability interpretation.
+**Allocation of co-produced BAL.** The transaction-level decomposition measures the amount of runtime BAL directly matched to state creation, co-produced alongside state creation, and generated by transactions with no observed state creation. We do not identify how the co-produced component would scale when execution and state prices vary independently. We therefore set $\lambda=0$ in the central specification, assigning co-produced access to the execution/access parent activity, and use $\lambda\in\{0,0.5,1\}$ as a sensitivity range. These values represent alternative behavioral allocations rather than estimated probabilities or coefficients.
 
-**Execution is a proxy for existing-state access.** The counterfactual mapping $A/A^0=(q_{\mathrm{execution}}/q_{\mathrm{execution}}^0)^{\rho_A}$ allows BAL intensity to change as execution expands. The values 0.75, 1, and 1.25 bracket sub-proportional, proportional, and more-than-proportional scaling; they are sensitivities rather than predictions.
+**Execution is a proxy for existing-state access.** Since we do not separately identify the demand of state access, the counterfactual mapping $A/A^0=(q_{\mathrm{execution}}/q_{\mathrm{execution}}^0)^{\rho_A}$ allows BAL intensity to change as execution expands. The values 0.75, 1, and 1.25 bracket sub-proportional, proportional, and more-than-proportional scaling; they are sensitivities rather than predictions.
 
-**The runtime counter does not measure the complete BAL payload.** The demand anchor uses EIP-8279's transaction-local runtime counter. Mandatory per transaction BAL entries are covered through `TX_BASE` rather than included in that counter, while the Xatu reconstruction may miss storage-value charges created inside reverted call frames. A design that prices the complete physical BAL would require a separate, block-aware measurement with address de-duplication.
-
-
+## Takeaways and Next Steps
+In this analysis, we establish the static-data metering multiplier under EIP-7999, the runtime-BAL gas anchor, and the decomposition of BAL between execution/access and state-creation activity. Because BAL is generated by parent activity rather than demanded independently, its data charge is included in the BAL-inclusive prices of execution and state. The next step is to combine these inputs with the estimated resource elasticities and solve the joint EIP-7999 equilibrium for execution, data, and state base fees.
 
 
 ## Parameters carried into the EIP-7999 equilibrium model
 
+Every anchor uses the 120 days from February 1 through May 31, 2026.
+
+Standard errors are sampling errors only, from resampling blocks with replacement inside each day, 2,000 times, matching the stratified design. A dash marks a full-population Xatu aggregate, which has no sampling error. Nothing here carries uncertainty from the attribution assumptions, from the elasticity estimates, or from the state-creation proxy behind $q_{\mathrm{state}}^0$ — those are discussed under Limitations and are larger than anything in this column.
+
+### Samples
+
+| Sample | Size | Used for |
+|---|---:|---|
+| Canonical blocks | 860,505 | Full-population calldata, blob hashes, and the EIP-7623 denominator |
+| EIP-8279 runtime sample | 6,000 blocks, 50 per day | Runtime BAL anchor and the three-way decomposition |
+| RPC static-field sample | 5,997 blocks | Access-list contents and authorization tuples |
+| RPC BAL construction sample | 2,000 blocks | Encoded-BAL comparison |
+
+### Anchors and multipliers
+
+| Parameter | Value | Std. error | Interpretation |
+|---|---:|---:|---|
+| Price anchor $p^0$ | 0.106928 gwei | — | Median of daily median base fees |
+| Execution activity $q_{\mathrm{execution}}^0$ | 23.942M gas/block | — | Historical gas-equivalent execution |
+| State activity $q_{\mathrm{state}}^0$ | 5.244M gas/block | — | Historical gas-equivalent state creation |
+| Current EIP-7623 data $q_{\mathrm{data}}^0$ | 1.180555M gas/block | — | Static-data denominator |
+| $m_{\mathrm{execution}}$ | 1.537898 | — | EIP-8038 and EIP-2780 execution repricing |
+| $m_{\mathrm{state}}$ | 5.656315 | — | EIP-8037 state gas with `CPSB = 1530` |
+| $m_{\mathrm{data,static}}$ | 1.807251 | 0.001513 | Static-data accounting conversion |
+| Static-data anchor $g_{\mathrm{static}}^0$ | 2.133559M data gas/block | 0.001786M | Flat-16 calldata plus access lists, authorizations and their static BAL entries, and blob hashes |
+
+### Runtime BAL
+
+| Parameter | Value | Std. error | Interpretation |
+|---|---:|---:|---|
+| Runtime-meter anchor | 119,944 bytes/block | 661 | EIP-8279 reconstruction over the 6,000-block sample |
+| Metered anchor $g_{\mathrm{BAL}}^0$ | 1.919100M data gas/block | 0.010578M | Runtime counter at 16 data gas per byte |
+| Direct-state share $\omega_{\mathrm{state-only}}$ | 0.113937 | 0.001414 | Bytes matched to persistent state creation |
+| Co-produced share $\omega_{\mathrm{coproduced}}$ | 0.378791 | 0.001429 | Remaining bytes in state-creating transactions |
+| Non-state share $\omega_{\mathrm{nonstate}}$ | 0.507272 | 0.001775 | Bytes in transactions with no observed state creation |
+| Runtime counter / encoded BAL | 0.9007 | — | Ratio over the 2,000 matched blocks |
+
+### Demand responses and structural parameters
 
 | Parameter | Value | Interpretation |
 |---|---:|---|
-| Current EIP-7623 data quantity $q_{\mathrm{data}}^0$ | 1.180555M gas/block | Historical static-data denominator |
-| Counterfactual static-data anchor $g_{\mathrm{static}}^0$ | 2.133559M data gas/block | Flat-16 calldata plus access lists, authorizations and their static BAL entries, and blob hashes |
-| Static-data metering multiplier $m_{\mathrm{data,static}}$ | 1.807251 | Accounting conversion applied to static-data demand |
-| BAL runtime-meter anchor | 119,944 bytes/block | Direct EIP-8279 event reconstruction over 6,000 blocks |
-| BAL metered anchor | 1.919100M data gas/block | Runtime counter at 16 data gas per byte |
-| Direct-state runtime BAL share | 0.113937 | Runtime bytes matched to persistent state creation |
-| Co-produced runtime BAL share | 0.378791 | Remaining runtime bytes in state-creating transactions |
-| Non-state-transaction runtime BAL share | 0.507272 | Runtime bytes in transactions with no observed state creation |
-| Co-produced allocation $\lambda$ | 0 as reference; 0.5 and 1 as sensitivities | Fraction of $c$ assigned to state; the remainder follows execution/access activity |
+| $\epsilon_{\mathrm{execution}}$ | 0.121160 | Applied to the BAL-inclusive execution price |
+| $\epsilon_{\mathrm{data}}$ | 0.229476 | Applied to static data only |
+| $\epsilon_{\mathrm{state}}$ | 0.334864 | Applied to the BAL-inclusive state price |
+| $w_{\mathrm{execution}}$ | 0.071023 | Data gas per historical execution unit, at $\lambda=0$ |
+| $w_{\mathrm{state}}$ | 0.041695 | Data gas per historical state unit, at $\lambda=0$ |
+| $w_{\mathrm{execution}}/m_{\mathrm{execution}}$ | 0.046182 | Data gas per unit of metered execution gas |
+| $w_{\mathrm{state}}/m_{\mathrm{state}}$ | 0.007371 | Data gas per unit of metered state gas |
+| Co-produced allocation $\lambda$ | 0 central; 0.5 and 1 as sensitivity | Share of co-produced access routed through state rather than execution |
+| Access-scaling $\rho_A$ | 1 central; 0.75 and 1.25 as sensitivity | Sub-proportional, proportional, and more-than-proportional scaling of access within execution |
 
-
-
-## Reproducibility
-
-The publication-facing calculations are split into two ordered notebooks:
-
-1. [data metering and the runtime-BAL anchor](../notebooks/7999_equilibrium/01-data-metering-runtime-bal.ipynb); and
-2. [BAL decomposition and parent-activity demand](../notebooks/7999_equilibrium/02-bal-decomposition.ipynb).
-
-Notebook 01 contains the credential-aware Xatu and RPC refresh path, including
-the deterministic 50-block-per-day sampling plan. Notebook 02 contains the
-resumable transaction-level Xatu attribution. Both default to cached mode and
-write compact handoffs under `data/7999/`.
-
-
-
-
-
-
+The three elasticities are estimated in [the previous elasticity analysis](https://ethresear.ch/t/demand-model-with-elasticities-for-ethereum-state-data-and-execution-and-glamsterdam-fee-market-analysis/25644) and carried into this one, as are $p^0$, the two activity anchors, and $m_{\mathrm{execution}}$ and $m_{\mathrm{state}}$. Everything else in these tables is produced by the notebooks accompanying this post.
 
 ## Appendix: Data sources
 
@@ -405,6 +508,18 @@ write compact handoffs under `data/7999/`.
 | Xatu storage, contract, balance, nonce, and address-appearance tables | Transaction-level new slots, accounts, and code used for state-linked matching |
 | Xatu `default.execution_transaction` | Transaction and calldata byte counts |
 | Xatu `default.canonical_execution_transaction` | Receipt gas used only for the appendix cost diagnostic |
+
+### Encoded-BAL comparison
+
+| Source | Fields used |
+|---|---|
+| Ethnodeops Erigon RPC sample | Complete block bodies and state diffs, from which the BAL is reconstructed and RLP-encoded to measure its physical size |
+| Xatu runtime sample | The EIP-8279 counter for the same blocks |
+
+The comparison uses the 2,000 blocks present in both samples. The encoded side
+comes from the earlier RPC BAL reconstruction rather than from a fresh pull, so
+notebook 01 computes the comparison from that cache and skips it when the cache
+is absent.
 
 
 ### Static-data metering multiplier
