@@ -617,7 +617,7 @@ limit has a 30M target, so the fee must rise until regular gas contracts to the
 target. At a 100M limit, both branches expand as the fee falls, but regular gas
 still reaches the 50M target first because it is initially closer to 50M.
 
-State receives the largest metering increase, which initially makes state
+State experiences the strongest repricing effect, which initially makes state
 creation much more expensive than execution or data. It also has the largest
 estimated elasticity. As additional capacity lowers the shared fee, state
 demand rebounds faster than the regular branch. Under the isoelastic curves,
@@ -741,7 +741,7 @@ for execution, $0.201–0.229$ for data, and $0.254–0.478$ for state. In the
 Glamsterdam fee market, regular gas determines the equilibrium fee at 60M and
 100M, while state becomes the candidate bottleneck from 150M onward under the
 unrestricted isoelastic benchmark. This transition reflects state's
-combination of the largest metering increase and the highest elasticity. The
+combination of the strongest repricing effect and the highest elasticity. The
 high-capacity state equilibria require activity several times above the
 historical anchor, so both the exact base fees and the binding branch remain
 conditional on the unobserved tail of state demand.

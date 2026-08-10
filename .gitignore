@@ -31,7 +31,6 @@ markdowns/demand_model_plan.md
 !/plots/three_way_equilibrium_gas_limit_curves_2026-02-01_2026-06-01.png
 !/plots/glamsterdam_effective_price_ratios_2026-02-01_2026-06-01.png
 !/plots/glamsterdam_state_cap_branch_regimes_2026-02-01_2026-06-01.png
-!/plots/bal_state_creation_coupling_calibration_2026-02-01_2026-06-01.png
 !/plots/bal_runtime_8279_three_way_components_2026-02-01_2026-06-01.png
 !/plots/daily_data_resource_components_runtime_8279_2026-02-01_2026-06-01.png
 !/plots/bal_data_demand_response_2026-02-01_2026-06-01.png
@@ -40,5 +39,7 @@ markdowns/demand_model_plan.md
 !/plots/bal_bundle_pricing_execution_floor_regime_2026-02-01_2026-06-01.png
 !/plots/bal_bundle_pricing_execution_frontier_sensitivity_2026-02-01_2026-06-01.png
 !/plots/bal_bundle_pricing_300m_inverse_sensitivity_2026-02-01_2026-06-01.png
-!/plots/bal_bundle_pricing_capacity_grid_2026-02-01_2026-06-01.png
-!/plots/bal_bundle_pricing_2026-02-01_2026-06-01.png
+
+# Contiguous empirical shock panels are large regenerable pulls; the builder
+# scripts and the block ranges in the manifest reproduce them.
+/data/contiguous/
