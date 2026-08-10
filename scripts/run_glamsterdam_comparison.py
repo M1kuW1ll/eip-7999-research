@@ -47,10 +47,15 @@ EPS = {"execution": 0.121160, "data": 0.229476, "state": 0.334864}
 GLAMSTERDAM_CENTRAL_LIMIT = 200e6
 GLAMSTERDAM_SWEEP = (100e6, 150e6, 200e6, 300e6, 450e6, 600e6)
 
+# The data limit is a fixed protocol constant, so every design shares it and
+# only the targets vary. E250/D45 is the central case: at a conventional half
+# target ratio it captures essentially all the throughput the 90M limit allows,
+# 235.6M, at 94% utilisation, where raising T_E further only lowers utilisation.
+DATA_LIMIT = 90e6
 DESIGNS = [
-    ("E200_D45_fixed90M", 200e6, 45e6, 90e6),
-    ("E300_D77_fixed90M", 300e6, 77e6, 90e6),
-    ("E300_D77_matched2x", 300e6, 77e6, 154e6),
+    ("E200_D45", 200e6, 45e6, DATA_LIMIT),
+    ("E250_D45", 250e6, 45e6, DATA_LIMIT),
+    ("E250_D60", 250e6, 60e6, DATA_LIMIT),
 ]
 
 # Representative bundles in historical gas-equivalent units, so the mechanisms
@@ -155,7 +160,7 @@ def main() -> None:
                 "data": float(out["mean_fee_wei"][:, 1].mean()),
                 "state": float(out["mean_fee_wei"][:, 2].mean())}
         rows.append({
-            "mechanism": "eip7999", "design": name, "is_central": name == "E300_D77_matched2x",
+            "mechanism": "eip7999", "design": name, "is_central": name == "E250_D45",
             "gas_limit": np.nan, "gas_target": np.nan,
             "included_execution": float(out["mean_used"][:, 0].mean()),
             "state_gas": float(out["mean_used"][:, 2].mean()),
