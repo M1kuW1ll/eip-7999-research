@@ -121,7 +121,7 @@ def main() -> None:
         panel, N_SEEDS, STRESS_BLOCKS, DEFAULT_BLOCK_LENGTH,
         np.random.default_rng(20260808),
     )
-    tiled = np.tile(base_shocks, (len(SHORTLIST), 1, 1))
+    tiled = base_shocks
 
     starts = {
         "warm": np.repeat(warm_fees, N_SEEDS, axis=0),

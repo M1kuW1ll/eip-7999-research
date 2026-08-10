@@ -174,11 +174,22 @@ def run_batch(
     defines the warm or cold start.
     """
 
-    batch, n_blocks, n_shocks = shocks.shape
+    n_paths, n_blocks, n_shocks = shocks.shape
     if n_shocks != 4:
         raise ValueError("shocks must have four components")
-    if batch != config.batch_size:
-        raise ValueError("shock batch does not match config batch")
+    batch = config.batch_size
+    if n_paths == batch:
+        shock_index = None
+    elif batch % n_paths == 0:
+        # The shock path varies only over seeds, so designs and specifications
+        # index into a shared array instead of materialising a tiled copy. At
+        # Stage C scale the tiled array was 2.65 GB and the run was memory
+        # bound rather than compute bound.
+        shock_index = np.tile(np.arange(n_paths), batch // n_paths)
+    else:
+        raise ValueError(
+            f"batch {batch} is not a multiple of the {n_paths} supplied shock paths"
+        )
 
     p0_wei = config.p0_gwei * GWEI
     fees = np.maximum(initial_base_fee_wei.astype(float), MIN_BASE_FEE_PER_GAS)
@@ -208,7 +219,8 @@ def run_batch(
     execution_ratio = np.ones(batch)
 
     for t in range(n_blocks):
-        s_execution, s_data, s_state, a_access = (shocks[:, t, i] for i in range(4))
+        block_shocks = shocks[:, t, :] if shock_index is None else shocks[shock_index, t, :]
+        s_execution, s_data, s_state, a_access = (block_shocks[:, i] for i in range(4))
 
         average_intensity = config.w_execution * execution_ratio ** (config.rho_A - 1.0)
         parent_execution = config.m_execution * fees[:, 0] + average_intensity * fees[:, 1]

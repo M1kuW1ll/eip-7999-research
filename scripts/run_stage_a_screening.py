@@ -126,7 +126,7 @@ def main() -> None:
             g_static_0=float(anchor.static_data_gas_per_block),
             p0_gwei=float(demand.base_fee_ref_gwei),
         )
-        shocks = np.tile(shared, (n_designs, 1, 1))
+        shocks = shared
         out = run_batch(cfg, shocks, bundle_cost_equivalent_start(cfg),
                         burn_in=BURN_IN_DAYS * BLOCKS_PER_DAY)
 

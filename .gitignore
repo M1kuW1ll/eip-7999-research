@@ -12,6 +12,7 @@ data/7999/*
 !data/7999/stage_a_screening.csv
 !data/7999/stage_a_manifest.json
 !data/7999/stage_b_stresses.csv
+!data/7999/stage_c_robustness.csv
 *.parquet
 
 # Superseded research material retained locally only
