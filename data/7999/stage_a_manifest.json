@@ -1,0 +1,52 @@
+{
+  "primitive_panel": {
+    "start": "2026-05-18",
+    "days": 14,
+    "blocks": [
+      25118359,
+      25218797
+    ],
+    "n_blocks": 100439,
+    "script": "scripts/build_contiguous_block_panel.py"
+  },
+  "runtime_bal_panel": {
+    "blocks": [
+      25118359,
+      25218797
+    ],
+    "n_blocks": 100439,
+    "script": "scripts/build_contiguous_runtime_bal.py",
+    "zero_bal_blocks": 45,
+    "zero_bal_note": "42 of 45 have zero transactions and zero gas used; all 45 have zero metered events, so they are genuine empty blocks rather than reconstruction failures"
+  },
+  "sampler": {
+    "block_length": 1600,
+    "selected_by": "choose_block_length, minimises reproduction error on integrated correlation time",
+    "mean_relative_tau_error": 0.174,
+    "measured_tau_blocks": {
+      "s_execution": 7.44,
+      "s_data": 30.35,
+      "s_state": 30.08,
+      "a_access": 6.56
+    },
+    "cross_correlation": {
+      "exec_data": 0.806,
+      "exec_state": 0.623,
+      "data_state": 0.597,
+      "access_exec": -0.187
+    }
+  },
+  "stage_a": {
+    "n_designs": 18,
+    "n_seeds": 32,
+    "burn_in_days": 1,
+    "measure_days": 7,
+    "shock_seed": 20260807,
+    "common_random_numbers": true,
+    "calibrations": [
+      "central35",
+      "adverse75"
+    ],
+    "script": "scripts/run_stage_a_screening.py"
+  }
+}
