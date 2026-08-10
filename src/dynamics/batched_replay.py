@@ -165,6 +165,7 @@ def run_batch(
     shocks: np.ndarray,
     initial_base_fee_wei: np.ndarray,
     burn_in: int = 0,
+    return_paths: bool = False,
 ) -> dict[str, np.ndarray]:
     """Advance every trajectory through ``shocks`` and return online summaries.
 
@@ -197,6 +198,10 @@ def run_batch(
     )
 
     summary = OnlineSummary(batch)
+    # Stress runs are short enough to retain full paths; screening runs are not,
+    # which is why summaries are otherwise accumulated online.
+    fee_paths = np.empty((batch, n_blocks, 3)) if return_paths else None
+    used_paths = np.empty((batch, n_blocks, 3)) if return_paths else None
     # Average execution BAL intensity depends on realised execution, so it uses
     # the previous block's ratio: within a block, users cannot know the ratio
     # their own inclusion produces.
@@ -245,8 +250,14 @@ def run_batch(
 
         if t >= burn_in:
             summary.update(fees, previous_fees, used, offered, limits)
+        if fee_paths is not None:
+            fee_paths[:, t, :] = fees
+            used_paths[:, t, :] = used
 
     result = summary.to_dict()
     result["final_base_fee_wei"] = fees
     result["final_excess_gas"] = excess
+    if fee_paths is not None:
+        result["fee_paths"] = fee_paths
+        result["used_paths"] = used_paths
     return result
