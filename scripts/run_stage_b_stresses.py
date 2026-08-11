@@ -2,7 +2,8 @@
 
 Stage A screened on ordinary variation. This adds the named directional
 stresses and the two initial conditions, on a deliberately small design set so
-the results stay interpretable.
+the results stay interpretable. The data limit is a protocol constant, so all
+five designs share it and only the targets differ.
 
 Warm starts are obtained by burning the design in under unit shocks rather than
 by calling a separate static solver. Each design then converges to its own
@@ -40,11 +41,11 @@ N_SEEDS = 24
 STATE_TARGET = 75_000_000.0
 
 SHORTLIST = [
-    ("E200_D45_fixed90M", 200e6, 45e6, 90e6),
-    ("E300_D77_fixed90M", 300e6, 77e6, 90e6),
-    ("E300_D77_matched2x", 300e6, 77e6, 154e6),
-    ("E300_D85_fixed90M", 300e6, 85e6, 90e6),
-    ("E300_D85_matched2x", 300e6, 85e6, 170e6),
+    ("E200_D45", 200e6, 45e6, 90e6),
+    ("E250_D45", 250e6, 45e6, 90e6),
+    ("E250_D60", 250e6, 60e6, 90e6),
+    ("E300_D77", 300e6, 77e6, 90e6),
+    ("E300_D85", 300e6, 85e6, 90e6),
 ]
 
 # Amplitude and half-life in blocks, per shock component (execution, data,
