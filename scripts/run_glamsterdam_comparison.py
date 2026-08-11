@@ -92,7 +92,7 @@ def seven999_config(design, batch, demand, anchor):
     )
 
 
-def glamsterdam_config(gas_limit, batch, glam):
+def glamsterdam_config(gas_limit, batch, glam, demand):
     ones = np.ones(batch)
     return GlamsterdamConfig(
         gas_target=ones * gas_limit / 2.0, gas_limit=ones * gas_limit,
@@ -100,6 +100,8 @@ def glamsterdam_config(gas_limit, batch, glam):
         eps_state=ones * EPS["state"],
         m_execution=float(glam.m_execution), m_data=float(glam.m_data),
         m_state=float(glam.m_state),
+        w_execution=float(demand.w_execution_reference),
+        w_state=float(demand.w_state_reference),
         q_execution_0=float(glam.q_execution_per_block),
         q_data_0=float(glam.q_data_per_block),
         q_state_0=float(glam.q_state_per_block),
@@ -137,7 +139,8 @@ def main() -> None:
     rows = []
     for gas_limit in GLAMSTERDAM_SWEEP:
         out = run_glamsterdam_batch(
-            glamsterdam_config(gas_limit, N_SEEDS, glam), shocks, start_fee, burn_in=BURN_IN
+            glamsterdam_config(gas_limit, N_SEEDS, glam, demand), shocks, start_fee,
+            burn_in=BURN_IN,
         )
         shared = float(out["mean_fee_wei"][:, 0].mean())
         rows.append({

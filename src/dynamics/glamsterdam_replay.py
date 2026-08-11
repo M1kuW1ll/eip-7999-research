@@ -11,6 +11,17 @@ so metering is multi-dimensional while pricing stays one-dimensional. That is
 the structural difference being tested: under EIP-7999 the same workload faces
 three prices and a BAL charge, here it faces one price and none.
 
+Fee update. Glamsterdam is a hardfork of the current chain and keeps the EIP-1559
+rule, which is *not* the rule EIP-7999 uses. EIP-1559 moves the fee itself by a
+fraction of the relative gap to target, capped at one eighth per block; EIP-7999
+accumulates a normalised excess-gas counter and exponentiates it. The two agree
+on their maximum per-block rate, both reaching 12.5%, and they share the same
+fixed point at u = T -- so mean throughput is largely a fixed-point property and
+is insensitive to which is used. They differ in the approach to that fixed point
+and in floor behaviour, so volatility, limit-hit and floor statistics are not
+transferable between them. Using the EIP-7999 rule here would compare EIP-7999's
+dynamics against itself.
+
 Shock convention. The same latent workload (s_E, s_D, s_S, a) drives both
 mechanisms. The access-composition shock ``a`` changes the BAL payload in both
 worlds, but BAL is not a priced resource under Glamsterdam, so it does not
@@ -24,11 +35,36 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .batched_replay import (
-    EffectivePriceSummary,
-    GWEI, MIN_BASE_FEE_PER_GAS, OnlineSummary, compute_base_fee,
-    excess_gas_for_base_fee, update_excess_gas,
-)
+from .batched_replay import EffectivePriceSummary, GWEI, OnlineSummary
+
+BASE_FEE_MAX_CHANGE_DENOMINATOR = 8
+
+
+def update_base_fee_1559(
+    base_fee: np.ndarray, gas_used: np.ndarray, gas_target: np.ndarray,
+) -> np.ndarray:
+    """EIP-1559 base-fee update, reproducing the reference integer arithmetic.
+
+    The spec computes ``base_fee * delta_gas // target // 8``. Successive floors
+    by a positive integer collapse, so that equals ``floor(base_fee * delta_gas /
+    (target * 8))``, which is evaluated here in a grouping that keeps the
+    intermediate small enough to stay inside float64's exact-integer range.
+
+    The upward step is floored at one wei by the spec; the downward step is not,
+    so integer truncation stalls the fee once ``base_fee`` drops below the change
+    denominator. That gives EIP-1559 an emergent floor near 8 wei rather than the
+    explicit one-wei floor EIP-7999 sets, and it is reproduced rather than
+    smoothed over.
+    """
+
+    gap = gas_used - gas_target
+    step = np.floor(
+        base_fee * (np.abs(gap) / (gas_target * float(BASE_FEE_MAX_CHANGE_DENOMINATOR)))
+    )
+    return np.where(
+        gap > 0, base_fee + np.maximum(step, 1.0),
+        np.where(gap < 0, base_fee - step, base_fee),
+    )
 
 
 @dataclass(frozen=True)
@@ -82,8 +118,8 @@ def run_glamsterdam_batch(
         raise ValueError("batch is not a multiple of the supplied shock paths")
 
     p0_wei = config.p0_gwei * GWEI
-    fee = np.maximum(initial_base_fee_wei.astype(float), MIN_BASE_FEE_PER_GAS)
-    excess = excess_gas_for_base_fee(fee)
+    # EIP-1559 carries no excess-gas accumulator: the fee itself is the state.
+    fee = np.maximum(initial_base_fee_wei.astype(float), 1.0)
 
     summary = OnlineSummary(batch)
     effective_prices = EffectivePriceSummary(batch)
@@ -122,8 +158,7 @@ def run_glamsterdam_batch(
         used = np.minimum(offered, config.gas_limit)
 
         previous_fee = fee
-        excess = update_excess_gas(excess, used, config.gas_target, config.gas_limit)
-        fee = compute_base_fee(excess)
+        fee = update_base_fee_1559(fee, used, config.gas_target)
 
         # The three effective activity prices. Each is a fixed multiple of the one
         # shared fee, so under this mechanism they are perfectly correlated by

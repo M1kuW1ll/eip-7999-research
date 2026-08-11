@@ -39,14 +39,14 @@ steady state looks like in detail — are in the appendix.
    block is clipped before the fee can respond, so scarcity is resolved by
    exclusion rather than price. The most congested design has the *smallest*
    fee response — a failure that reads as stability on any volatility metric.
-5. **Against Glamsterdam at 200M, EIP-7999 delivers 3.5× the execution with 27%
+5. **Against Glamsterdam at 200M, EIP-7999 delivers 3.4× the execution with 29%
    less state creation**, because one shared fee cannot separate execution from
    state and the most elastic resource absorbs the headroom.
 6. **Separate pricing decouples the three prices, and moves cost onto state.**
    Under Glamsterdam all three effective activity prices are multiples of one
-   fee and vary identically (sd 0.058); under EIP-7999 they separate — execution
+   fee and vary identically (sd 0.061); under EIP-7999 they separate — execution
    0.050, data 0.050, state 0.185. An execution-heavy bundle becomes almost
-   free while a state-creating bundle costs 2.3× more.
+   free while a state-creating bundle costs 2.5× more.
 
 ---
 
@@ -233,6 +233,27 @@ data in one branch against state in the other, and pricing both with one base
 fee. Its three effective prices are $P_i = m_i^G b_G$ — fixed multiples of the
 shared fee, so they move together exactly.
 
+**The two mechanisms update their fees by different rules, and each is
+simulated with its own.** Glamsterdam is a hardfork of the current chain and
+keeps EIP-1559, which moves the fee itself by a fraction of the relative gap to
+target:
+
+$$
+b_{t+1}=b_t\pm\left\lfloor\frac{b_t\,|u_t-T|}{8\,T}\right\rfloor .
+$$
+
+EIP-7999 instead accumulates a normalised excess-gas counter and exponentiates
+it, $b=\lfloor\exp(\text{excess}/D)\rfloor$. The two agree on their maximum
+per-block rate — both reach 12.5% — and share the same fixed point at $u=T$,
+which is why mean throughput is largely insensitive to the choice. They differ
+in the approach to that fixed point and at the floor: EIP-7999 clamps its
+counter at zero and holds a one-wei minimum, while EIP-1559's downward step
+truncates to zero once $b_t<8$, giving it an emergent floor near 8 wei. So
+volatility, limit-hit and floor statistics are *not* transferable between the
+two rules, and simulating Glamsterdam with the EIP-7999 update would compare
+EIP-7999's dynamics against themselves. The EIP-1559 step here reproduces the
+reference integer arithmetic exactly on all 4,080 cases tested.
+
 Both mechanisms are driven by the same latent workload
 $(s_E, s_D, s_S, a)$. Identical shocks do not mean identical metered gas, and
 the difference is the object under test:
@@ -391,37 +412,37 @@ shock draws.
 
 | Metric | conservative | central | aggressive | Glamsterdam 200M |
 |---|---:|---:|---:|---:|
-| delivered execution | 198.2M | 223.3M | 249.6M | 64.4M |
+| delivered execution | 198.2M | 223.3M | 249.6M | 64.9M |
 | execution fill | 0.991 | 0.993 | 0.998 | — |
-| state gas created | 75.0M | 75.0M | 75.0M | 103.2M |
-| execution per unit of state | 2.64 | 2.98 | 3.33 | **0.62** |
-| blocks at a hard limit | 2.2% | 2.9% | 16.1% | 9.1% |
-| rationed data | 0.09M | 0.46M | 3.78M | 10.34M |
-| execution price, sd | 0.042 | 0.050 | 0.062 | 0.058 |
-| data price, sd | 0.041 | 0.050 | 0.059 | 0.058 |
-| state price, sd | 0.185 | 0.185 | 0.185 | 0.058 |
+| state gas created | 75.0M | 75.0M | 75.0M | 105.8M |
+| execution per unit of state | 2.64 | 2.98 | 3.33 | **0.61** |
+| blocks at a hard limit | 2.2% | 2.9% | 16.1% | 9.6% |
+| rationed data | 0.09M | 0.46M | 3.78M | 11.20M |
+| execution price, sd | 0.042 | 0.050 | 0.062 | 0.061 |
+| data price, sd | 0.041 | 0.050 | 0.059 | 0.061 |
+| state price, sd | 0.185 | 0.185 | 0.185 | 0.061 |
 | state price, p99 | 0.705 | 0.705 | 0.705 | 0.120 |
 | execution fee at floor | 15.8% | 13.3% | 5.0% | 0.0% |
 
-**Throughput.** At its central parameters EIP-7999 delivers **3.5× the execution
-with 27% less state creation**. Scaling Glamsterdam does not close the gap:
+**Throughput.** At its central parameters EIP-7999 delivers **3.4× the execution
+with 29% less state creation**. Scaling Glamsterdam does not close the gap:
 execution per unit of state *falls* as capacity rises, because lowering the
 shared fee expands the most elastic resource fastest. State creation has the
 largest estimated elasticity, so it absorbs the headroom — the state branch
-already sets the fee in 64% of blocks at a 200M limit, rising to 97% at 600M.
+already sets the fee in 66% of blocks at a 200M limit, rising to 97% at 600M.
 
 | | execution | state gas | execution per unit state |
 |---|---:|---:|---:|
-| Glamsterdam, 100M limit | 42.8M | 33.9M | 1.26 |
-| **Glamsterdam, 200M limit** | **64.5M** | **102.6M** | **0.63** |
-| Glamsterdam, 300M limit | 76.6M | 164.3M | 0.47 |
-| Glamsterdam, 600M limit | 99.4M | 337.3M | 0.29 |
+| Glamsterdam, 100M limit | 43.2M | 34.8M | 1.24 |
+| **Glamsterdam, 200M limit** | **65.1M** | **105.2M** | **0.62** |
+| Glamsterdam, 300M limit | 77.3M | 168.3M | 0.46 |
+| Glamsterdam, 600M limit | 100.2M | 345.3M | 0.29 |
 | **EIP-7999, E225/D45** | **223.4M** | **75.0M** | **2.98** |
 
 ![Mechanism frontier](../plots/dynamic_mechanism_frontier.png)
 
 **Prices.** Under Glamsterdam the three effective prices are fixed multiples of
-one fee, so they vary identically — sd 0.058 and p99 0.120 for all three, by
+one fee, so they vary identically — sd 0.061 and p99 0.120 for all three, by
 construction rather than by measurement. Under EIP-7999 they separate: execution
 and data near 0.050, state at 0.185 with a p99 of 0.705. Separate pricing does
 not make every price calmer. It makes each price track its own resource, and
@@ -432,13 +453,13 @@ volatile than a shared fee would make it.
 
 | bundle | conservative | central | aggressive | Glamsterdam 200M |
 |---|---:|---:|---:|---:|
-| execution-heavy | 0.04 | 0.02 | 0.01 | 515.8 |
-| data-heavy | 0.33 | 0.10 | 0.02 | 427.8 |
-| state-creating | 1378.7 | 1378.7 | 1378.7 | 588.1 |
-| mixed | 344.8 | 344.7 | 344.7 | 464.4 |
+| execution-heavy | 0.04 | 0.02 | 0.01 | 476.7 |
+| data-heavy | 0.33 | 0.10 | 0.02 | 395.4 |
+| state-creating | 1378.7 | 1378.7 | 1378.7 | 543.6 |
+| mixed | 344.8 | 344.7 | 344.7 | 429.3 |
 
 This is the mechanism doing what separate pricing is for. Execution and data
-become nearly free while state creation costs 2.3× more, because the externality
+become nearly free while state creation costs 2.5× more, because the externality
 is now priced where it is produced instead of being averaged into one fee.
 
 The caveat is capacity, and it is large. These EIP-7999 configurations carry
