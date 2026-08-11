@@ -16,9 +16,11 @@ Glamsterdam when both run at their own proposed parameters.
 **Main results**
 
 1. **A fixed data limit, not the execution target, sets the achievable
-   throughput.** Under a 90M data limit, roughly **237M** of execution is
-   deliverable with data-limit pressure held under 5% of blocks. Reaching 300M
-   requires a data target at 86% of the limit and puts **53%** of blocks at it.
+   throughput.** Under a 90M data limit and with data-limit pressure held under
+   5% of blocks, **223M** of execution is deliverable by a target the mechanism
+   actually clears, and **237M** if a target that is never met is acceptable.
+   Reaching 300M requires a data target at 86% of the limit and puts **53%** of
+   blocks at it.
 2. **The two target choices are close to separable.** Data-limit pressure is
    almost entirely a function of the target ratio $T_D/L_D$: it moves from
    0.033 to 0.028 as the execution target goes 150M to 300M, but from 0.001 to
@@ -31,7 +33,7 @@ Glamsterdam when both run at their own proposed parameters.
 4. **Half the elasticity calibrations cannot reach 300M at all**, at any data
    capacity, and they announce themselves with an execution fee pinned at one
    wei in every block.
-5. **Against Glamsterdam at a 200M limit, EIP-7999 delivers 3.7× the execution
+5. **Against Glamsterdam at a 200M limit, EIP-7999 delivers 3.5× the execution
    with 27% less state creation**, because one shared fee cannot separate
    execution from state and the most elastic resource absorbs the headroom.
 
@@ -187,31 +189,49 @@ observations are serially dependent.
 Before comparing designs, two questions about the mechanism itself: how long the
 launch transient lasts, and what the market looks like once it has passed.
 
-**The transient is short and barely depends on the design.** Activating with no
-excess-gas history starts every base fee far above where the workload supports
-it — five to six orders of magnitude above, in these runs. Measuring against a
-warm run on *identical* shocks isolates the transient, because the fee has no
-single level to settle at, only a distribution whose hourly median already spans
-2× in the warm run with no transient present.
+**Each fee starts somewhere different and arrives separately.** Activation gives
+every resource the same starting point in cost terms — the effective price that
+resource carried at the historical anchor — but not the same distance to travel.
+Under separate pricing each resource has its own equilibrium, set by its own
+target against its own demand, and the three are nowhere near each other.
 
 ![Cold-start convergence](../plots/dynamic_cold_start_convergence.png)
 
-Every design meets its warm path within 176 to 238 blocks — about 35 to 48
-minutes. The spread across designs is small because the transient is governed by
-the fee update rate, which caps how fast a base fee can fall, rather than by the
-targets. A cold start is a launch-day artefact, not a design consideration.
+Execution begins about $10^7$ times above its equilibrium, data about
+$1.4\times10^5$, and state only about 11 times. That ordering is the point: a
+225M execution target is enormous relative to what the anchor workload actually
+wanted, so the execution fee has to fall almost to its floor, while the state
+target of 75M is close to what the anchor was already producing, so its fee
+barely moves.
 
-**In steady state, two of the three fees wander and one does not.**
+Convergence times follow that distance. Across all five designs the state fee
+meets its warm path in 153–194 blocks, data in 176–238, and execution in
+364–725. Everything has settled within about 725 blocks — under two and a half
+hours. The transient is governed by the fee update rate, which caps how fast a
+base fee can fall, so a cold start is a launch-day artefact rather than a design
+consideration; but it is worth knowing that the three fees do not arrive
+together, and that execution is the slow one.
+
+**In steady state all three fees range over more than a decade.**
 
 ![Steady-state distributions](../plots/dynamic_steady_state_distributions.png)
 
-At E250/D45 the data and state fees are spread over roughly a decade, consistent
-with the volatility arithmetic in §6. The execution fee is not: it rests on the
-1 wei floor in 80% of blocks and takes only 19 distinct values across the whole
-run. Execution is demand-constrained at this design — there is more execution
-capacity than the workload wants, so its price mechanism never engages. This is
-the same floor-bound regime the equilibrium report derives statically, visible
-here as a spike rather than a distribution.
+At E225/D45, 90% of blocks put the execution fee between 1 and 48 wei, the data
+fee between 131 and 1,284 wei, and the state fee between 0.65M and 20.0M wei.
+The three curves have nearly the same shape once each is measured against its
+own median, which is what the volatility arithmetic in §6 predicts: the spread
+comes from clearing quantity shocks through inelastic demand, and applies to
+every resource that prices to a target.
+
+Execution is the one to read carefully. Its fee settles at a median of 13 wei,
+so it prices in single-digit-to-tens of wei and its distribution is visibly
+discrete — the steps in the blue curve are individual integer wei. It sits on
+the 1 wei floor in 9.6% of blocks. That is a mild version of the floor-bound
+regime the equilibrium report derives statically, and it is worth watching,
+because a design only slightly larger crosses fully into it: at E250/D45, the
+same data target with a 25M larger execution target, the execution fee is on the
+floor in 80% of blocks and takes 19 distinct values in the entire run. That
+design is past its own ceiling — see §5.
 
 The right panel shows why congestion, not utilisation, is the metric that
 separates designs. All three resources sit below target on average — the modes
@@ -255,18 +275,30 @@ the data side supports lowers utilisation without adding throughput — the
 static result that the execution target drops out once it is floor-bound,
 appearing here as a design ceiling.
 
-**Deliverable execution against congestion tolerance:**
+**Deliverable execution against congestion tolerance.** Ranking designs by
+delivered gas alone is misleading, because the largest delivered figure at every
+tolerance comes from a 300M target that is never met. Both readings are given:
 
-| tolerance on data-limit hits | deliverable execution | target ratio |
-|---|---:|---:|
-| ≤ 1% | 207M | 0.40 |
-| **≤ 5%** | **237M** | **0.50** |
-| ≤ 10% | 260M | 0.583 |
-| ≤ 25% | 281M | 0.667 |
+| tolerance on data-limit hits | most gas delivered | at | fill | largest target actually met | at | fill |
+|---|---:|---|---:|---:|---|---:|
+| ≤ 1% | 206.7M | E300, r=0.40 | 0.69 | 198.1M | E200, r=0.40 | 0.99 |
+| **≤ 5%** | **236.8M** | **E300, r=0.50** | **0.79** | **223.3M** | **E225, r=0.50** | **0.99** |
+| ≤ 10% | 260.1M | E300, r=0.583 | 0.87 | 224.8M | E225, r=0.583 | 1.00 |
+| ≤ 25% | 281.3M | E300, r=0.667 | 0.94 | 249.6M | E250, r=0.667 | 1.00 |
 
-A conventional half target ratio delivers about 237M. The 300M target that the
-static frontier admits at $T_D=77$M requires a ratio of 0.855 and puts more
-than half of blocks at the data limit.
+The left figures are real throughput — those blocks genuinely carry that much
+execution gas. But they are produced by configuring a target the data side
+cannot support, and the symptom is visible in the fee: at the ≤5% entry the
+execution fee is on its one-wei floor in 99.9% of blocks, so execution is not
+being priced at all, merely permitted. The right figures are the largest targets
+that the mechanism actually clears.
+
+**At a half target ratio, E225/D45 is the useful design.** It delivers 223.3M at
+99.3% fill with the execution fee off its floor in 87% of blocks. Raising the
+target to 250M buys 12M more delivered gas and costs the execution price signal:
+fill drops to 94% and the fee sits on the floor in 80% of blocks. The 300M
+target that the static frontier admits at $T_D=77$M needs a ratio of 0.855 and
+puts more than half of blocks at the data limit.
 
 > The data limit is the dominant lever. The 60M value written in
 > [ethereum/EIPs#11835](https://github.com/ethereum/EIPs/pull/11835) costs
@@ -283,7 +315,7 @@ changes how scarcity is resolved.
 | design | $T_D/L_D$ | data-limit hits | peak data-fee multiple | rationed data |
 |---|---:|---:|---:|---:|
 | E200/D45 | 0.500 | 2.9% | 18.2× | 0.45M |
-| E250/D45 | 0.500 | 2.7% | 15.4× | 0.40M |
+| E225/D45 | 0.500 | 2.8% | 16.3× | 0.41M |
 | E250/D60 | 0.667 | 15.7% | 18.4× | 3.60M |
 | E300/D77 | 0.856 | 52.8% | 13.7× | 22.6M |
 | **E300/D85** | **0.944** | **79.4%** | **5.9×** | **61.4M** |
@@ -345,7 +377,7 @@ varies by only 0.040 across every structural parameter and data limit tested.
 **Within the capacity-constrained regime the design conclusion holds.** Across
 all nine $\lambda\times\rho_A$ combinations at the 35-day window, data-limit
 hits stay within a percentage point of their central value for every design —
-E250/D45 at 0.028–0.033, E250/D60 at 0.161–0.169, E300/D77 at 0.530–0.537. The
+E225/D45 at 0.029–0.034, E250/D60 at 0.161–0.169, E300/D77 at 0.530–0.537. The
 structural assumptions move the result far less than the target ratio does.
 
 ---
@@ -369,11 +401,11 @@ is the structural difference under test, so it is reported directly.
 | **Glamsterdam, 200M limit** | **64.5M** | **102.6M** | **0.63** |
 | Glamsterdam, 300M limit | 76.6M | 164.3M | 0.47 |
 | Glamsterdam, 600M limit | 99.4M | 337.3M | 0.29 |
-| **EIP-7999, E250/D45** | **236.1M** | **75.0M** | **3.15** |
+| **EIP-7999, E225/D45** | **223.4M** | **75.0M** | **2.98** |
 
 ![Mechanism frontier](../plots/dynamic_mechanism_frontier.png)
 
-At its central parameters EIP-7999 delivers **3.7× the execution with 27% less
+At its central parameters EIP-7999 delivers **3.5× the execution with 27% less
 state creation**. Scaling Glamsterdam does not close the gap: execution per unit
 of state *falls* as capacity rises, because lowering the shared fee expands the
 most elastic resource fastest. State creation has the largest estimated

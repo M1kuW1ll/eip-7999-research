@@ -39,7 +39,7 @@ DATA_LIMIT = 90e6
 EPS = {"execution": 0.121160, "data": 0.229476, "state": 0.334864}
 
 DESIGNS = [
-    ("E200/D45", 200e6, 45e6), ("E250/D45", 250e6, 45e6),
+    ("E200/D45", 200e6, 45e6), ("E225/D45", 225e6, 45e6),
     ("E250/D60", 250e6, 60e6), ("E300/D77", 300e6, 77e6),
     ("E300/D85", 300e6, 85e6),
 ]
@@ -106,57 +106,71 @@ def main() -> None:
     hours = np.arange(n_blocks) * 12 / 3600
 
     # ---- Figure 1: cold-start convergence -------------------------------
+    # All three fees are shown, not just data. Each resource starts from the
+    # historical anchor's effective price for that resource and has its own
+    # equilibrium to reach, and the three do not arrive together: how far a fee
+    # has to travel depends on how far its design's target sits from what the
+    # anchor workload wanted, which differs per resource.
+    #
+    # Each path is normalised by a warm run on identical shocks rather than by a
+    # single equilibrium level, because a fee has no level to settle at, only a
+    # distribution -- the warm run's own hourly median already spans 2x with no
+    # transient present. The paired ratio cancels that shared variation, so
+    # every resource converges to 1 and the three become comparable on one axis
+    # despite pricing different gas units at wildly different levels.
+    reference = DESIGNS.index(("E225/D45", 225e6, 45e6))
     fig, axes = plt.subplots(1, 2, figsize=(13.5, 5.0),
-                             gridspec_kw={"width_ratios": [1.55, 1]})
+                             gridspec_kw={"width_ratios": [1.35, 1]})
     ax = axes[0]
-    convergence = []
-    for i, ((name, _te, _td), colour) in enumerate(zip(DESIGNS, colours)):
-        sl = slice(i * N_SEEDS, (i + 1) * N_SEEDS)
-        # Paired against the warm run on the same seeds. Comparing the cold path
-        # to a single equilibrium level does not work: the fee has no level to
-        # settle at, only a distribution, whose hourly median already spans 2x
-        # in the warm run with no transient present. The paired difference
-        # cancels that shared variation and isolates the transient.
-        cold_path = np.median(cold["fee_paths"][sl, :, 1], axis=0)
-        warm_path = np.median(warm["fee_paths"][sl, :, 1], axis=0)
+    # The transient is measured as a first crossing: the first block at which the
+    # cold path is no longer above the warm path. The cold start begins orders of
+    # magnitude high and decays monotonically, so the crossing is unambiguous and
+    # needs no tolerance. A band criterion would have to be chosen instead, and
+    # because base fees are integers settling anywhere from one wei to hundreds,
+    # a band is loose for one resource and strict for another -- it measures the
+    # fee level rather than the speed of convergence. The crossing is non-strict
+    # because fees are integers: once the paths have merged they hold the same
+    # value exactly, and a strict test would then wait for an unrelated downward
+    # fluctuation long after the transient had cleared.
+    def crossing(paths_slice, j):
+        cold_path = np.median(cold["fee_paths"][paths_slice, :, j], axis=0)
+        warm_path = np.median(warm["fee_paths"][paths_slice, :, j], axis=0)
         ratio = cold_path / np.maximum(warm_path, 1.0)
-        ax.plot(np.arange(n_blocks), ratio, color=colour, linewidth=1.6, label=name)
-        # The transient is measured as a first crossing: the first block at which
-        # the cold path is no longer above the warm path. The cold start begins
-        # five to six orders of magnitude high and decays monotonically, so the
-        # crossing is unambiguous and needs no tolerance. A band criterion would
-        # have to be chosen instead, and because base fees are integers settling
-        # anywhere from tens to hundreds of wei, a band is loose for one design
-        # and strict for another -- it measures the fee level rather than the
-        # speed of convergence. The crossing is non-strict because fees are
-        # integers: once a saturated design has merged, the two paths hold the
-        # same value exactly, and a strict test would then wait for an unrelated
-        # downward fluctuation long after the transient had cleared.
         settled = np.flatnonzero(ratio <= 1.0)
-        convergence.append(int(settled[0]) if len(settled) else -1)
+        return ratio, (int(settled[0]) if len(settled) else -1)
+
+    ref_slice = slice(reference * N_SEEDS, (reference + 1) * N_SEEDS)
+    for j, resource in enumerate(("execution", "data", "state")):
+        ratio, blocks = crossing(ref_slice, j)
+        ax.plot(np.arange(n_blocks), ratio, color=RESOURCE_HUES[resource],
+                linewidth=1.7, label=f"{resource} — {blocks} blocks")
     ax.axhline(1.0, color=INK_MUTED, linewidth=0.9, linestyle="--")
     ax.set_yscale("log")
     ax.set_xscale("log")
     ax.set_xlim(1, n_blocks)
     ax.set_xlabel("blocks since activation")
     ax.set_ylabel("cold fee / warm fee, same shocks")
-    ax.set_title("The launch transient clears in a few hundred blocks")
-    ax.annotate("warm-start path", xy=(n_blocks * 0.25, 1.0), xytext=(0, 8),
+    ax.set_title(f"Three fees, three starting points, {DESIGNS[reference][0]}")
+    ax.annotate("warm-start path", xy=(n_blocks * 0.22, 1.0), xytext=(0, 8),
                 textcoords="offset points", color=INK_MUTED, fontsize=11)
-    ax.legend(frameon=False, loc="upper right", title="design", title_fontsize=11)
+    ax.legend(frameon=False, loc="upper right", title="resource", title_fontsize=11)
     ax.grid(alpha=0.5, which="both")
 
     ax = axes[1]
-    order = np.argsort(convergence)
-    ax.barh(np.arange(len(DESIGNS)), [convergence[i] for i in order],
-            color=[colours[i] for i in order], height=0.62)
-    ax.set_yticks(np.arange(len(DESIGNS)), [DESIGNS[i][0] for i in order])
-    for y, i in enumerate(order):
-        ax.annotate(f"{convergence[i]} blocks", xy=(convergence[i], y), xytext=(6, 0),
-                    textcoords="offset points", va="center", color=INK, fontsize=11)
+    convergence = {}
+    for i, (name, _te, _td) in enumerate(DESIGNS):
+        sl = slice(i * N_SEEDS, (i + 1) * N_SEEDS)
+        convergence[name] = [crossing(sl, j)[1] for j in range(3)]
+    y = np.arange(len(DESIGNS))
+    height = 0.26
+    for j, resource in enumerate(("execution", "data", "state")):
+        ax.barh(y + (1 - j) * height, [convergence[d[0]][j] for d in DESIGNS],
+                height=height, color=RESOURCE_HUES[resource], label=resource)
+    ax.set_yticks(y, [d[0] for d in DESIGNS])
+    ax.invert_yaxis()
     ax.set_xlabel("blocks until the cold path meets the warm path")
-    ax.set_title("Transient duration is set by the update rate")
-    ax.set_xlim(0, max(convergence) * 1.38)
+    ax.set_title("Execution starts furthest from its equilibrium")
+    ax.legend(frameon=False, loc="lower right", title="resource", title_fontsize=11)
     ax.grid(axis="x", alpha=0.5)
     fig.tight_layout()
     fig.savefig(PLOTS / "dynamic_cold_start_convergence.png", dpi=200, bbox_inches="tight")
@@ -164,36 +178,33 @@ def main() -> None:
 
     # ---- Figure 2: steady state around equilibrium ----------------------
     fig, axes = plt.subplots(1, 2, figsize=(13.5, 5.0))
-    reference = DESIGNS.index(("E250/D45", 250e6, 45e6))
     sl = slice(reference * N_SEEDS, (reference + 1) * N_SEEDS)
     settled = slice(BLOCKS_PER_DAY, None)
 
     ax = axes[0]
-    # Execution is not on the same footing as the other two here. At this design
-    # it is demand-constrained: its fee rests on the one-wei floor in most
-    # blocks, so its "distribution" is a spike over a handful of integers rather
-    # than a spread. Plotted on a shared density axis that spike is tall enough
-    # to flatten the data and state distributions into the baseline, so the axis
-    # is capped to the continuous part and the spike is labelled instead.
-    floor_share = None
+    # An empirical CDF rather than a histogram, because the three resources are
+    # not equally continuous. Execution settles at a median of a few tens of wei
+    # and is therefore genuinely discrete -- one integer step near its median is
+    # wider than a fixed log-width bin, so a histogram renders it as a comb of
+    # empty gaps, which is an artefact of the binning rather than the fee. State
+    # settles near 2e6 wei, where the same integer grid is effectively
+    # continuous. A CDF treats both correctly and needs no bin choice.
     for j, resource in enumerate(("execution", "data", "state")):
-        series = warm["fee_paths"][sl, settled, j].ravel()
-        if resource == "execution":
-            floor_share = float((series <= 1.0).mean())
-        series = np.log10(series / np.median(series))
-        ax.hist(series, bins=70, histtype="step", linewidth=1.8,
-                color=RESOURCE_HUES[resource], label=resource, density=True)
+        series = np.sort(warm["fee_paths"][sl, settled, j].ravel())
+        p5, p95 = np.percentile(series, [5, 95])
+        span = (f"{p5/1e6:.2g}–{p95/1e6:.1f}M wei" if p95 > 1e5
+                else f"{p5:,.0f}–{p95:,.0f} wei")
+        ax.plot(np.log10(series / np.median(series)),
+                np.linspace(0, 1, series.size), color=RESOURCE_HUES[resource],
+                linewidth=1.9, label=f"{resource} — {span}")
     ax.axvline(0, color=INK_MUTED, linewidth=0.9, linestyle="--")
-    ax.set_ylim(0, 2.6)
-    ax.annotate(f"execution rests on the\n1 wei floor in {floor_share:.0%} of blocks",
-                xy=(-0.01, 2.52), xytext=(-1.15, 2.30), color=RESOURCE_HUES["execution"],
-                fontsize=11, va="top", ha="left",
-                arrowprops=dict(arrowstyle="->", color=RESOURCE_HUES["execution"],
-                                lw=1.2, connectionstyle="arc3,rad=-0.15"))
+    for level in (0.05, 0.95):
+        ax.axhline(level, color=GRID, linewidth=0.8, linestyle=":")
     ax.set_xlabel("base fee relative to its median, log$_{10}$")
-    ax.set_ylabel("density")
-    ax.set_title("Data and state fees wander; execution is pinned")
-    ax.legend(frameon=False, loc="upper right")
+    ax.set_ylabel("fraction of blocks below")
+    ax.set_title("All three fees span more than a decade")
+    ax.legend(frameon=False, loc="upper left", title="90% of blocks lie in",
+              title_fontsize=11)
     ax.grid(alpha=0.5)
 
     ax = axes[1]
@@ -213,7 +224,7 @@ def main() -> None:
     ax.set_xlim(0, 2.6)
     ax.set_xlabel("included gas relative to target")
     ax.set_ylabel("density")
-    ax.set_title("Utilisation around target, E250/D45")
+    ax.set_title(f"Utilisation around target, {DESIGNS[reference][0]}")
     ax.legend(frameon=False)
     ax.grid(alpha=0.5)
     fig.tight_layout()
@@ -253,7 +264,7 @@ def main() -> None:
     stage_b = stage_b[(stage_b.start == "warm") & (stage_b.stress == "baseline")].copy()
     stage_b["ratio"] = stage_b.design.str.split("_D").str[1].astype(float) * 1e6 / DATA_LIMIT
     stage_b = stage_b.sort_values("ratio")
-    # E200/D45 and E250/D45 share a target ratio, so no line is drawn through
+    # E200/D45 and E225/D45 share a target ratio, so no line is drawn through
     # these points: a curve would have to pass vertically through two designs at
     # the same x, and the gap between them at that one ratio is itself worth
     # seeing, since it bounds how much of the vertical spread is not the ratio.
@@ -262,9 +273,9 @@ def main() -> None:
     # The two coincident designs sit on top of each other in the congestion
     # panel and are well separated in the price panel, so the offsets differ by
     # panel rather than being shared.
-    offsets_congestion = {"E200_D45": (11, -11), "E250_D45": (11, 4), "E250_D60": (0, 11),
+    offsets_congestion = {"E200_D45": (11, -11), "E225_D45": (11, 4), "E250_D60": (0, 11),
                           "E300_D77": (0, 11), "E300_D85": (0, 11)}
-    offsets_price = {"E200_D45": (11, -4), "E250_D45": (11, -4), "E250_D60": (0, 11),
+    offsets_price = {"E200_D45": (11, -4), "E225_D45": (11, -4), "E250_D60": (0, 11),
                      "E300_D77": (0, 11), "E300_D85": (0, 11)}
     fig, axes = plt.subplots(1, 2, figsize=(13.5, 5.0), sharex=True)
     for ax, column, title, ylabel, label_offsets in (
@@ -333,8 +344,10 @@ def main() -> None:
                  "saturation_pathology", "mechanism_frontier"):
         print(f"  dynamic_{name}.png")
     print("\nblocks until the cold path is no longer above the warm path:")
-    for (name, _te, _td), blocks in zip(DESIGNS, convergence):
-        print(f"  {name:10s} {blocks:5d} blocks  ({blocks*12/60:.0f} min)")
+    for name, blocks in convergence.items():
+        parts = "  ".join(f"{r} {b}" for r, b in
+                          zip(("execution", "data", "state"), blocks))
+        print(f"  {name:>10}   {parts}")
 
 
 if __name__ == "__main__":
