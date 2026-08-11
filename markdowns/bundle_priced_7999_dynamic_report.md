@@ -204,13 +204,37 @@ wanted, so the execution fee has to fall almost to its floor, while the state
 target of 75M is close to what the anchor was already producing, so its fee
 barely moves.
 
-Convergence times follow that distance. Across all five designs the state fee
-meets its warm path in 153–194 blocks, data in 176–238, and execution in
-364–725. Everything has settled within about 725 blocks — under two and a half
-hours. The transient is governed by the fee update rate, which caps how fast a
-base fee can fall, so a cold start is a launch-day artefact rather than a design
-consideration; but it is worth knowing that the three fees do not arrive
-together, and that execution is the slow one.
+Across all five designs the state fee meets its warm path in 153–194 blocks,
+data in 176–238, and execution in 364–725. Everything has settled within about
+725 blocks — under two and a half hours — so a cold start is a launch-day
+artefact rather than a design consideration. But the three fees do not arrive
+together, and execution is the slow one.
+
+**The distance travelled is not what makes it slow.** Splitting the execution
+transient at ten times equilibrium separates two phases that behave oppositely:
+
+| design | warm equilibrium | equilibrium excess gas | fall to 10× | 10× → 1× | total |
+|---|---:|---:|---:|---:|---:|
+| E200/D45 | 46 wei | 1.63×10¹⁰ | 184 | 479 | 663 |
+| E225/D45 | 7 wei | 8.26×10⁹ | 223 | 502 | 725 |
+| E250/D60 | 6 wei | 7.61×10⁹ | 207 | 325 | 532 |
+| E300/D77 | 1 wei | 0 | 217 | 186 | 403 |
+| E300/D85 | 2 wei | 2.94×10⁹ | 209 | 155 | 364 |
+
+The fall is ordered by distance and is nearly identical everywhere: 184 to 223
+blocks, because the fee decays geometrically and the designs start from the same
+place. For E200/D45 that first phase is a 145,000-fold fall in 184 blocks. The
+final tenfold then takes 479.
+
+That last phase is what separates the designs, and it runs opposite to distance.
+The excess-gas recursion is clamped at zero, so a design whose equilibrium fee is
+the one-wei floor has an equilibrium excess of exactly zero: its cold path does
+not converge onto an interior level, it runs its excess down until the clamp
+catches it, and arrives. A design whose equilibrium sits well above the floor
+must approach asymptotically instead — as the fee nears equilibrium demand
+recovers toward the target, $|u-T|\to0$, and the per-block drift vanishes with
+it. So E300/D85 starts furthest from its equilibrium, pays for that in the fast
+phase, and still converges soonest, because it is aimed at the floor.
 
 **In steady state all three fees range over more than a decade.**
 
