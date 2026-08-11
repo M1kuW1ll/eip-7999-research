@@ -182,7 +182,46 @@ observations are serially dependent.
 
 ---
 
-## 4. How much execution a fixed data limit delivers
+## 4. Cold start and steady state
+
+Before comparing designs, two questions about the mechanism itself: how long the
+launch transient lasts, and what the market looks like once it has passed.
+
+**The transient is short and barely depends on the design.** Activating with no
+excess-gas history starts every base fee far above where the workload supports
+it — five to six orders of magnitude above, in these runs. Measuring against a
+warm run on *identical* shocks isolates the transient, because the fee has no
+single level to settle at, only a distribution whose hourly median already spans
+2× in the warm run with no transient present.
+
+![Cold-start convergence](../plots/dynamic_cold_start_convergence.png)
+
+Every design meets its warm path within 176 to 238 blocks — about 35 to 48
+minutes. The spread across designs is small because the transient is governed by
+the fee update rate, which caps how fast a base fee can fall, rather than by the
+targets. A cold start is a launch-day artefact, not a design consideration.
+
+**In steady state, two of the three fees wander and one does not.**
+
+![Steady-state distributions](../plots/dynamic_steady_state_distributions.png)
+
+At E250/D45 the data and state fees are spread over roughly a decade, consistent
+with the volatility arithmetic in §6. The execution fee is not: it rests on the
+1 wei floor in 80% of blocks and takes only 19 distinct values across the whole
+run. Execution is demand-constrained at this design — there is more execution
+capacity than the workload wants, so its price mechanism never engages. This is
+the same floor-bound regime the equilibrium report derives statically, visible
+here as a spike rather than a distribution.
+
+The right panel shows why congestion, not utilisation, is the metric that
+separates designs. All three resources sit below target on average — the modes
+are near 0.85 — and their bulk shapes are similar. What distinguishes the data
+resource is the spike at exactly 2.0, the data limit at this design: blocks
+clipped by the limit rather than cleared by the price.
+
+---
+
+## 5. How much execution a fixed data limit delivers
 
 Sweeping both targets independently, rather than coupling them through the
 static frontier, separates two effects that the frontier confounds.
@@ -202,6 +241,13 @@ Data-limit hit fraction, $L_{\mathrm{data}}=90$M:
 
 The two design choices are therefore close to separable: pick the target ratio
 from the tolerable congestion, then pick the execution target for throughput.
+
+![Design surface](../plots/dynamic_design_surface.png)
+
+The right panel is the separability result over the full grid: all seven
+execution targets collapse onto one curve, so congestion is a function of the
+target ratio alone. The left panel is the ceiling — each execution target's
+curve flattens once the data side stops supporting more.
 
 **Delivered execution saturates.** At a half target ratio, execution targets of
 250M, 275M and 300M all deliver about 236.8M. Configuring a target above what
@@ -229,7 +275,7 @@ than half of blocks at the data limit.
 
 ---
 
-## 5. Saturation compresses the price signal
+## 6. Saturation compresses the price signal
 
 Pushing the data target toward its limit does not merely increase congestion. It
 changes how scarcity is resolved.
@@ -242,10 +288,14 @@ changes how scarcity is resolved.
 | E300/D77 | 0.856 | 52.8% | 13.7× | 22.6M |
 | **E300/D85** | **0.944** | **79.4%** | **5.9×** | **61.4M** |
 
+![Saturation pathology](../plots/dynamic_saturation_pathology.png)
+
 The most congested design has the *smallest* fee response. Once the block is
 clipped in four blocks out of five, the fee controller never observes the
 demand that was turned away, so the price stops rising and exclusion does the
-allocating instead.
+allocating instead. The two panels move together up to a ratio of about
+two-thirds and then diverge: congestion keeps climbing while the price response
+turns over and falls to a third of its value at the lower ratios.
 
 This matters for how designs are screened. Low fee volatility normally reads as
 a good property; here it is the signature of a mechanism that has stopped
@@ -270,7 +320,7 @@ this in any mechanism that prices to a target.
 
 ---
 
-## 6. Robustness, and when the question has no answer
+## 7. Robustness, and when the question has no answer
 
 The full grid of three $\lambda$ values, three $\rho_A$ values and four
 elasticity windows is run on each design. Half of it does not test what it
@@ -300,7 +350,7 @@ structural assumptions move the result far less than the target ratio does.
 
 ---
 
-## 7. Comparison with Glamsterdam
+## 8. Comparison with Glamsterdam
 
 Both mechanisms run at their own proposed parameters over identical shock
 paths. Glamsterdam is a 200M gas limit with a 100M target, metering execution
@@ -320,6 +370,8 @@ is the structural difference under test, so it is reported directly.
 | Glamsterdam, 300M limit | 76.6M | 164.3M | 0.47 |
 | Glamsterdam, 600M limit | 99.4M | 337.3M | 0.29 |
 | **EIP-7999, E250/D45** | **236.1M** | **75.0M** | **3.15** |
+
+![Mechanism frontier](../plots/dynamic_mechanism_frontier.png)
 
 At its central parameters EIP-7999 delivers **3.7× the execution with 27% less
 state creation**. Scaling Glamsterdam does not close the gap: execution per unit
@@ -377,4 +429,5 @@ selected bootstrap block length are recorded in
 `scripts/run_design_surface.py`, `scripts/run_stage_b_stresses.py`,
 `scripts/run_stage_c_robustness.py` and
 `scripts/run_glamsterdam_comparison.py`, each writing its result table to
-`data/7999/`.
+`data/7999/`. `scripts/make_dynamic_report_figures.py` draws the five figures
+from those tables, re-running the cold and warm replays it needs for §4.

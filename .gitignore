@@ -50,6 +50,11 @@ markdowns/demand_model_plan.md
 !/plots/bal_bundle_pricing_execution_floor_regime_2026-02-01_2026-06-01.png
 !/plots/bal_bundle_pricing_execution_frontier_sensitivity_2026-02-01_2026-06-01.png
 !/plots/bal_bundle_pricing_300m_inverse_sensitivity_2026-02-01_2026-06-01.png
+!/plots/dynamic_cold_start_convergence.png
+!/plots/dynamic_steady_state_distributions.png
+!/plots/dynamic_design_surface.png
+!/plots/dynamic_saturation_pathology.png
+!/plots/dynamic_mechanism_frontier.png
 
 # Contiguous empirical shock panels are large regenerable pulls; the builder
 # scripts and the block ranges in the manifest reproduce them.
