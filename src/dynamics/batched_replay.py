@@ -96,6 +96,80 @@ def update_excess_gas(
 
 
 @dataclass
+class EffectivePriceSummary:
+    """Streaming log-return moments and quantiles for effective activity prices.
+
+    What a user actually pays for a unit of activity is not a single base fee.
+    Under EIP-7999 an execution unit is charged its own metered gas plus the BAL
+    data gas it produces, so its price mixes two fees that move independently;
+    under Glamsterdam all three prices are fixed multiples of one shared fee and
+    therefore move together exactly. Comparing raw base fees across the two
+    mechanisms compares different gas units, so the comparison is made on these
+    prices instead.
+
+    Quantiles come from a histogram of absolute log returns rather than retained
+    paths: the grid runs reach order 1e8 block updates, where keeping the series
+    needed for an exact percentile would run to gigabytes. Bin width is
+    ``max_abs / n_bins``, which sets the resolution of the reported quantile.
+    """
+
+    batch_size: int
+    width: int = 3
+    n_bins: int = 400
+    max_abs: float = 4.0
+
+    blocks: int = 0
+    _sum: np.ndarray = field(init=False)
+    _sumsq: np.ndarray = field(init=False)
+    _histogram: np.ndarray = field(init=False)
+    _rows: np.ndarray = field(init=False)
+    _columns: np.ndarray = field(init=False)
+
+    def __post_init__(self) -> None:
+        shape = (self.batch_size, self.width)
+        self._sum = np.zeros(shape)
+        self._sumsq = np.zeros(shape)
+        self._histogram = np.zeros((*shape, self.n_bins), dtype=np.int32)
+        self._rows = np.arange(self.batch_size)[:, None]
+        self._columns = np.arange(self.width)[None, :]
+
+    def update(self, prices: np.ndarray, previous_prices: np.ndarray) -> None:
+        self.blocks += 1
+        ret = np.log(np.maximum(prices, 1e-300) / np.maximum(previous_prices, 1e-300))
+        self._sum += ret
+        self._sumsq += ret * ret
+        # Returns beyond max_abs land in the final bin, so a reported quantile
+        # that saturates there is a lower bound rather than a wrong number.
+        index = np.clip(
+            (np.abs(ret) * (self.n_bins / self.max_abs)).astype(np.int64),
+            0, self.n_bins - 1,
+        )
+        # Each (trajectory, resource) contributes exactly one bin per block, so
+        # the index triple is unique within a call and plain fancy indexing is
+        # safe here. np.add.at would be correct too but is an order of magnitude
+        # slower, and this runs once per block for the whole batch.
+        self._histogram[self._rows, self._columns, index] += 1
+
+    def quantile(self, q: float) -> np.ndarray:
+        """Quantile of |log return|, taken at the upper edge of its bin."""
+
+        cumulative = np.cumsum(self._histogram, axis=-1)
+        threshold = q * cumulative[..., -1:]
+        index = (cumulative < threshold).sum(axis=-1)
+        return (index + 1) * (self.max_abs / self.n_bins)
+
+    def to_dict(self, prefix: str = "effective_price") -> dict[str, np.ndarray]:
+        n = max(self.blocks, 1)
+        mean = self._sum / n
+        var = np.maximum(self._sumsq / n - mean * mean, 0.0)
+        return {
+            f"{prefix}_log_return_sd": np.sqrt(var),
+            f"{prefix}_log_return_p95": self.quantile(0.95),
+            f"{prefix}_log_return_p99": self.quantile(0.99),
+        }
+
+
+@dataclass
 class OnlineSummary:
     """Streaming accumulators. Nothing here grows with the number of blocks."""
 
@@ -209,6 +283,16 @@ def run_batch(
     )
 
     summary = OnlineSummary(batch)
+    effective_prices = EffectivePriceSummary(batch)
+    # Seeded from the launch fees so the first measured block has a predecessor
+    # and the price series covers exactly the same blocks as the fee series. At
+    # t=0 the execution ratio is 1, so the realised access intensity equals the
+    # reference one for every rho_A.
+    previous_prices = np.stack([
+        config.m_execution * fees[:, 0] + config.w_execution * fees[:, 1],
+        config.m_data_static * fees[:, 1],
+        config.m_state * fees[:, 2] + config.w_state * fees[:, 1],
+    ], axis=1)
     # Stress runs are short enough to retain full paths; screening runs are not,
     # which is why summaries are otherwise accumulated online.
     fee_paths = np.empty((batch, n_blocks, 3)) if return_paths else None
@@ -260,13 +344,29 @@ def run_batch(
         excess = update_excess_gas(excess, used, targets, denominator)
         fees = compute_base_fee(excess)
 
+        # What a unit of each activity costs, not what its own base fee is. Both
+        # parent prices carry the data fee through the BAL charge, so execution
+        # and state prices move with b_data even when their own fee is flat --
+        # which is the whole point of bundle pricing and is invisible in the raw
+        # fee series. The realised access intensity is used rather than the
+        # reference one, so that rho_A != 1 specifications price what their own
+        # BAL load implies; at the central rho_A = 1 the two coincide exactly.
+        prices = np.stack([
+            config.m_execution * fees[:, 0] + average_intensity * fees[:, 1],
+            config.m_data_static * fees[:, 1],
+            config.m_state * fees[:, 2] + config.w_state * fees[:, 1],
+        ], axis=1)
+
         if t >= burn_in:
             summary.update(fees, previous_fees, used, offered, limits)
+            effective_prices.update(prices, previous_prices)
+        previous_prices = prices
         if fee_paths is not None:
             fee_paths[:, t, :] = fees
             used_paths[:, t, :] = used
 
     result = summary.to_dict()
+    result.update(effective_prices.to_dict())
     result["final_base_fee_wei"] = fees
     result["final_excess_gas"] = excess
     if fee_paths is not None:

@@ -22,7 +22,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from dynamics.batched_replay import BatchConfig, run_batch  # noqa: E402
+from dynamics.batched_replay import RESOURCES, BatchConfig, run_batch  # noqa: E402
 from dynamics.empirical_shocks import (  # noqa: E402
     DEFAULT_BLOCK_LENGTH, build_shock_panel, moving_block_bootstrap,
 )
@@ -38,6 +38,13 @@ EPS = {"execution": 0.121160, "data": 0.229476, "state": 0.334864}
 EXECUTION_TARGETS = np.array([150, 175, 200, 225, 250, 275, 300]) * 1e6
 TARGET_RATIOS = np.array([0.25, 0.333, 0.40, 0.50, 0.583, 0.667, 0.75, 0.855])
 DATA_LIMITS = (90e6, 60e6)
+
+
+def cfg_target(config: BatchConfig, resource_index: int) -> np.ndarray:
+    """The target a resource's utilisation is measured against."""
+
+    return (config.execution_target, config.data_target,
+            config.state_target)[resource_index]
 
 
 def main() -> None:
@@ -81,7 +88,7 @@ def main() -> None:
         for i, (execution_target, data_target) in enumerate(grid):
             sl = slice(i * N_SEEDS, (i + 1) * N_SEEDS)
             hits = out["limit_hit_fraction"][sl, 1]
-            rows.append({
+            row = {
                 "data_limit": data_limit, "execution_target": execution_target,
                 "data_target": data_target, "target_ratio": data_target / data_limit,
                 "included_execution": float(out["mean_used"][sl, 0].mean()),
@@ -92,7 +99,28 @@ def main() -> None:
                 "rationed_data": float(out["mean_rationed"][sl, 1].mean()),
                 "execution_floor_fraction": float(out["floor_fraction"][sl, 0].mean()),
                 "data_fee_sd": float(out["log_return_sd"][sl, 1].mean()),
-            })
+            }
+            # Every resource carries the same metric set, so a design can be read
+            # on any axis without going back to the kernel. Prices are the
+            # effective activity prices, not the raw base fees: an execution unit
+            # pays its own metered gas plus the BAL data gas it generates, so its
+            # base fee alone understates both its level and its variation.
+            for j, resource in enumerate(RESOURCES):
+                row.update({
+                    f"{resource}_used": float(out["mean_used"][sl, j].mean()),
+                    f"{resource}_utilisation": float(
+                        out["mean_used"][sl, j].mean() / cfg_target(cfg, j)[i * N_SEEDS]
+                    ),
+                    f"{resource}_limit_hit_fraction": float(out["limit_hit_fraction"][sl, j].mean()),
+                    f"{resource}_rationed": float(out["mean_rationed"][sl, j].mean()),
+                    f"{resource}_floor_fraction": float(out["floor_fraction"][sl, j].mean()),
+                    f"{resource}_fee_wei": float(out["mean_fee_wei"][sl, j].mean()),
+                    f"{resource}_fee_sd": float(out["log_return_sd"][sl, j].mean()),
+                    f"{resource}_price_sd": float(out["effective_price_log_return_sd"][sl, j].mean()),
+                    f"{resource}_price_p95": float(out["effective_price_log_return_p95"][sl, j].mean()),
+                    f"{resource}_price_p99": float(out["effective_price_log_return_p99"][sl, j].mean()),
+                })
+            rows.append(row)
         print(f"  data limit {data_limit/1e6:.0f}M: {n} designs done")
 
     results = pd.DataFrame(rows)
