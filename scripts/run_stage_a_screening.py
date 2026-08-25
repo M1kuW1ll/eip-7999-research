@@ -22,9 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from dynamics.batched_replay import BatchConfig, run_batch, GWEI  # noqa: E402
-from dynamics.empirical_shocks import (  # noqa: E402
-    DEFAULT_BLOCK_LENGTH, build_shock_panel, moving_block_bootstrap,
-)
+from run_multiscale_design_surface import build_canonical_workload  # noqa: E402
 
 BLOCKS_PER_DAY = 7_200
 BURN_IN_DAYS = 1
@@ -85,19 +83,16 @@ def main() -> None:
     anchor = pd.read_csv(ROOT / "data/7999/data_metering_runtime_bal_anchor.csv").iloc[0]
     demand = pd.read_csv(ROOT / "data/7999/bal_decomposition_demand_parameters.csv").iloc[0]
 
-    panel = build_shock_panel(
-        ROOT / "data/contiguous/contiguous_block_panel_2026-05-18_14d.csv",
-        [ROOT / "data/contiguous/contiguous_runtime_bal_full14d_25118359_25218797.csv"],
-        ROOT / "data/7999/bal_decomposition_demand_parameters.csv",
-    )
     n_blocks = (BURN_IN_DAYS + MEASURE_DAYS) * BLOCKS_PER_DAY
-    print(f"shock panel: {panel.n_blocks:,} blocks; drawing {N_SEEDS} paths x {n_blocks:,} blocks")
+    workload = build_canonical_workload()
+    print(
+        f"shock panel: {workload.fast_panel.n_blocks:,} blocks; "
+        f"drawing {N_SEEDS} paths x {n_blocks:,} blocks"
+    )
 
     # Common random numbers: every design and calibration sees the identical
     # shock paths, so design comparisons are paired and seed noise cancels.
-    shared = moving_block_bootstrap(
-        panel, N_SEEDS, n_blocks, DEFAULT_BLOCK_LENGTH, np.random.default_rng(20260807)
-    )
+    shared = workload.paths
 
     rows = []
     for calibration, eps in CALIBRATIONS.items():
@@ -127,8 +122,10 @@ def main() -> None:
             p0_gwei=float(demand.base_fee_ref_gwei),
         )
         shocks = shared
-        out = run_batch(cfg, shocks, bundle_cost_equivalent_start(cfg),
-                        burn_in=BURN_IN_DAYS * BLOCKS_PER_DAY)
+        out = run_batch(
+            cfg, shocks, bundle_cost_equivalent_start(cfg),
+            burn_in=BURN_IN_DAYS * BLOCKS_PER_DAY, bundle_consistent=True,
+        )
 
         for i, design in designs.iterrows():
             sl = slice(i * N_SEEDS, (i + 1) * N_SEEDS)
@@ -165,7 +162,9 @@ def main() -> None:
                 "fee_sd_data": out["log_return_sd"][sl, 1].mean(),
                 "data_limit_hit_fraction": out["limit_hit_fraction"][sl, 1].mean(),
                 "longest_data_limit_run": out["longest_limit_run"][sl, 1].mean(),
-                "execution_floor_fraction": out["floor_fraction"][sl, 0].mean(),
+                "execution_floor_bounded_fraction": out[
+                    "floor_downward_pressure_fraction"
+                ][sl, 0].mean(),
                 "rationed_data": out["mean_rationed"][sl, 1].mean(),
                 "rationed_execution": out["mean_rationed"][sl, 0].mean(),
                 "mean_data_fee_wei": out["mean_fee_wei"][sl, 1].mean(),

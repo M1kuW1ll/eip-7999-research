@@ -13,14 +13,13 @@ three prices and a BAL charge, here it faces one price and none.
 
 Fee update. Glamsterdam is a hardfork of the current chain and keeps the EIP-1559
 rule, which is *not* the rule EIP-7999 uses. EIP-1559 moves the fee itself by a
-fraction of the relative gap to target, capped at one eighth per block; EIP-7999
-accumulates a normalised excess-gas counter and exponentiates it. The two agree
-on their maximum per-block rate, both reaching 12.5%, and they share the same
-fixed point at u = T -- so mean throughput is largely a fixed-point property and
-is insensitive to which is used. They differ in the approach to that fixed point
-and in floor behaviour, so volatility, limit-hit and floor statistics are not
-transferable between them. Using the EIP-7999 rule here would compare EIP-7999's
-dynamics against itself.
+fraction of the relative gap to target; with the usual limit equal to twice the
+target, its largest upward move is one eighth per block. EIP-7999 accumulates a
+normalised excess-gas counter and exponentiates it, with dynamics that depend on
+each resource's target-to-limit ratio. The two share the same fixed point at
+u = T, but differ in the approach to it and in floor behaviour. Volatility,
+limit-hit and floor statistics are therefore not transferable between them.
+Using the EIP-7999 rule here would compare EIP-7999's dynamics against itself.
 
 Shock convention. The same latent workload (s_E, s_D, s_S, a) drives both
 mechanisms. The access-composition shock ``a`` changes the BAL payload in both
@@ -52,8 +51,9 @@ def update_base_fee_1559(
 
     The upward step is floored at one wei by the spec; the downward step is not,
     so integer truncation stalls the fee once ``base_fee`` drops below the change
-    denominator. That gives EIP-1559 an emergent floor near 8 wei rather than the
-    explicit one-wei floor EIP-7999 sets, and it is reproduced rather than
+    denominator. An under-target path can therefore stall below 8 wei rather
+    than reaching EIP-7999's explicit one-wei floor, and that truncation is
+    reproduced rather than
     smoothed over.
     """
 
@@ -127,8 +127,13 @@ def run_glamsterdam_batch(
         [config.m_execution * fee, config.m_data * fee, config.m_state * fee], axis=1
     )
     execution_used_sum = np.zeros(batch)
+    data_used_sum = np.zeros(batch)
+    execution_rationed_sum = np.zeros(batch)
+    data_rationed_sum = np.zeros(batch)
+    state_rationed_sum = np.zeros(batch)
     bal_payload_sum = np.zeros(batch)
     regular_binding_count = np.zeros(batch)
+    sub_eight_count = np.zeros(batch)
     measured = 0
 
     for t in range(n_blocks):
@@ -155,7 +160,17 @@ def run_glamsterdam_batch(
         regular_gas = config.m_execution * q_execution + config.m_data * q_data
         state_gas = config.m_state * q_state
         offered = np.maximum(regular_gas, state_gas)
-        used = np.minimum(offered, config.gas_limit)
+        # Both branches are produced by the same transactions. If either branch
+        # exceeds the shared limit, an aggregate inclusion rule must reduce all
+        # parent activity together; otherwise the replay reports state or
+        # execution from transactions that could not have been included.
+        bundle_scale = np.minimum(
+            1.0, config.gas_limit / np.maximum(offered, 1e-300)
+        )
+        included_execution = config.m_execution * q_execution * bundle_scale
+        included_data = config.m_data * q_data * bundle_scale
+        included_state = state_gas * bundle_scale
+        used = offered * bundle_scale
 
         previous_fee = fee
         fee = update_base_fee_1559(fee, used, config.gas_target)
@@ -174,14 +189,15 @@ def run_glamsterdam_batch(
             triple = lambda values: np.stack([values, values, values], axis=1)
             summary.update(
                 triple(fee), triple(previous_fee),
-                np.stack([config.m_execution * q_execution, used, state_gas], axis=1),
+                np.stack([included_execution, used, included_state], axis=1),
                 np.stack([config.m_execution * q_execution, offered, state_gas], axis=1),
-                np.stack([config.gas_limit, config.gas_limit,
-                          np.full_like(config.gas_limit, np.inf)], axis=1),
+                np.stack([config.gas_limit, config.gas_limit, config.gas_limit], axis=1),
             )
-            # Included execution is its share of the clipped regular branch.
-            share = np.where(regular_gas > 0, config.m_execution * q_execution / regular_gas, 0.0)
-            execution_used_sum += share * np.minimum(regular_gas, config.gas_limit)
+            execution_used_sum += included_execution
+            data_used_sum += included_data
+            execution_rationed_sum += config.m_execution * q_execution - included_execution
+            data_rationed_sum += config.m_data * q_data - included_data
+            state_rationed_sum += state_gas - included_state
             regular_binding_count += regular_gas >= state_gas
             # BAL is produced here exactly as it is under EIP-7999, by the same
             # parent activity and the same access shock. It is simply not
@@ -190,13 +206,19 @@ def run_glamsterdam_batch(
             # Carrying it as a payload makes that difference measurable.
             bal_payload_sum += (
                 config.w_execution * q_execution + config.w_state * q_state
-            ) * a_access
+            ) * a_access * bundle_scale
+            sub_eight_count += fee < BASE_FEE_MAX_CHANGE_DENOMINATOR
         previous_prices = prices
 
     result = summary.to_dict()
     result.update(effective_prices.to_dict())
     result["final_base_fee_wei"] = fee
     result["mean_included_execution"] = execution_used_sum / max(measured, 1)
+    result["mean_included_data"] = data_used_sum / max(measured, 1)
+    result["mean_rationed_execution"] = execution_rationed_sum / max(measured, 1)
+    result["mean_rationed_data"] = data_rationed_sum / max(measured, 1)
+    result["mean_rationed_state"] = state_rationed_sum / max(measured, 1)
     result["regular_binding_fraction"] = regular_binding_count / max(measured, 1)
     result["mean_bal_payload"] = bal_payload_sum / max(measured, 1)
+    result["sub_eight_fee_fraction"] = sub_eight_count / max(measured, 1)
     return result

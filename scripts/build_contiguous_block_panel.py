@@ -23,11 +23,52 @@ import os
 import time
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 NETWORK = "mainnet"
+DEFAULT_STATE_CALIBRATION = PROJECT_ROOT / (
+    "data/calibration_state_access_auth_daily_rates_2026-02-01_2026-06-01.csv"
+)
+
+
+def allocate_weighted_with_caps(
+    total: float,
+    weights: np.ndarray,
+    capacities: np.ndarray,
+) -> np.ndarray:
+    """Allocate a calibrated daily total without exceeding block gas budgets."""
+
+    weights = np.asarray(weights, dtype=float)
+    remaining_capacity = np.asarray(capacities, dtype=float).clip(min=0.0)
+    allocation = np.zeros_like(remaining_capacity)
+    remaining = float(total)
+    tolerance = max(1e-7, 1e-12 * max(1.0, remaining))
+    if remaining < -tolerance or not np.isfinite(remaining):
+        raise ValueError("allocation total must be finite and non-negative")
+    if remaining > remaining_capacity.sum() + tolerance:
+        raise ValueError("calibrated state total exceeds the day's gas budget")
+
+    while remaining > tolerance:
+        active = remaining_capacity > tolerance
+        if not active.any():
+            raise ValueError("calibrated state allocation exhausted block capacity")
+        active_weights = np.where(active, weights.clip(min=0.0), 0.0)
+        if active_weights.sum() <= 0:
+            active_weights = np.where(active, remaining_capacity, 0.0)
+        proposal = remaining * active_weights / active_weights.sum()
+        saturated = active & (proposal >= remaining_capacity - tolerance)
+        if not saturated.any():
+            allocation += proposal
+            remaining = 0.0
+            break
+        allocation[saturated] += remaining_capacity[saturated]
+        remaining -= float(remaining_capacity[saturated].sum())
+        remaining_capacity[saturated] = 0.0
+
+    return allocation
 
 
 def client():
@@ -73,8 +114,9 @@ HEADERS = """
     GROUP BY block_number
 """
 
-# Charged calldata gas under current rules, including the EIP-7623 floor, plus
-# the receipt gas needed to separate execution from data.
+# Charged calldata gas under current rules, including the EIP-7623 floor when
+# the transaction-level floor proxy binds, plus the receipt gas needed to
+# separate execution from data. The dynamic source window is post-Pectra.
 CALLDATA = """
     SELECT block_number,
            count()                                            AS tx_count,
@@ -84,9 +126,11 @@ CALLDATA = """
            sum(toUInt64(4 * n_input_zero_bytes + 16 * n_input_nonzero_bytes))
                                                               AS standard_calldata_gas,
            sum(
-               greatest(
-                   toInt64(10 * (n_input_zero_bytes + 4 * n_input_nonzero_bytes))
-                   - toInt64(4 * (n_input_zero_bytes + 4 * n_input_nonzero_bytes)),
+               if(
+                   greatest(toInt64(gas_used) - 21000, 0)
+                       <= toInt64(10 * (n_input_zero_bytes + 4 * n_input_nonzero_bytes))
+                   AND (n_input_zero_bytes + n_input_nonzero_bytes) > 0,
+                   toInt64(6 * (n_input_zero_bytes + 4 * n_input_nonzero_bytes)),
                    0
                )
            )                                                  AS eip7623_floor_uplift
@@ -96,15 +140,24 @@ CALLDATA = """
     GROUP BY block_number
 """
 
+TYPE4_TRANSACTIONS = """
+    SELECT block_number,
+           countIf(type = 4) AS type4_tx_count
+    FROM default.execution_transaction FINAL
+    WHERE meta_network_name = {network:String}
+      AND block_number BETWEEN {lo:UInt64} AND {hi:UInt64}
+    GROUP BY block_number
+"""
+
 # Persistent state creation: slots moving off zero, plus deployed contract code.
 STORAGE = """
     SELECT block_number,
-           countIf(from_value = '0x0000000000000000000000000000000000000000000000000000000000000000'
-                   AND to_value != '0x0000000000000000000000000000000000000000000000000000000000000000')
-               AS new_storage_slots
+           uniqExact(tuple(lower(address), lower(slot))) AS new_storage_slots
     FROM default.canonical_execution_storage_diffs FINAL
     WHERE meta_network_name = {network:String}
       AND block_number BETWEEN {lo:UInt64} AND {hi:UInt64}
+      AND lower(from_value) = '0x0000000000000000000000000000000000000000000000000000000000000000'
+      AND lower(to_value) != '0x0000000000000000000000000000000000000000000000000000000000000000'
     GROUP BY block_number
 """
 
@@ -124,6 +177,16 @@ def main() -> None:
     parser.add_argument("--start", required=True, help="inclusive start date, YYYY-MM-DD")
     parser.add_argument("--days", type=int, default=1)
     parser.add_argument("--out-dir", default="data/contiguous")
+    parser.add_argument(
+        "--state-calibration",
+        type=Path,
+        default=DEFAULT_STATE_CALIBRATION,
+        help=(
+            "Daily RPC-sample means for new accounts and delegation indicators. "
+            "These supply expected per-block contributions that are unavailable "
+            "from the cheap Xatu block pull."
+        ),
+    )
     args = parser.parse_args()
 
     start_ts = f"{args.start} 00:00:00"
@@ -136,28 +199,111 @@ def main() -> None:
     params = {"network": NETWORK, "lo": lo, "hi": hi}
     frames = {}
     for name, sql in (("headers", HEADERS), ("calldata", CALLDATA),
+                      ("type4", TYPE4_TRANSACTIONS),
                       ("storage", STORAGE), ("contracts", CONTRACTS)):
         t0 = time.time()
         frames[name] = conn.query_df(sql, parameters=params, settings={"max_execution_time": 1800})
         print(f"  {name:10s} {len(frames[name]):>8,} rows  {time.time() - t0:6.1f}s")
 
     panel = frames["headers"]
-    for name in ("calldata", "storage", "contracts"):
+    for name in ("calldata", "type4", "storage", "contracts"):
         panel = panel.merge(frames[name], on="block_number", how="left")
     panel = panel.sort_values("block_number").reset_index(drop=True)
-    panel[["tx_count", "receipt_gas_used", "calldata_zero_bytes", "calldata_nonzero_bytes",
+    panel[["tx_count", "type4_tx_count", "receipt_gas_used", "calldata_zero_bytes", "calldata_nonzero_bytes",
            "standard_calldata_gas", "eip7623_floor_uplift", "new_storage_slots",
            "new_contract_accounts", "code_bytes"]] = panel[[
-        "tx_count", "receipt_gas_used", "calldata_zero_bytes", "calldata_nonzero_bytes",
+        "tx_count", "type4_tx_count", "receipt_gas_used", "calldata_zero_bytes", "calldata_nonzero_bytes",
         "standard_calldata_gas", "eip7623_floor_uplift", "new_storage_slots",
         "new_contract_accounts", "code_bytes"]].fillna(0)
 
-    # Current-rule resource split, matching the daily accounting convention:
-    # data gas includes the EIP-7623 floor, state uses the gas-equivalent proxy,
-    # and execution is the intrinsic-inclusive remainder.
+    state_rates = pd.read_csv(args.state_calibration)
+    required_rates = {
+        "date",
+        "new_accounts_per_block",
+        "new_delegation_indicators_per_block",
+    }
+    missing_rates = required_rates - set(state_rates.columns)
+    if missing_rates:
+        raise ValueError(
+            f"state calibration is missing columns: {sorted(missing_rates)}"
+        )
+    state_rates = state_rates.loc[:, sorted(required_rates)].copy()
+    state_rates["date"] = pd.to_datetime(state_rates["date"]).dt.normalize()
+    if state_rates["date"].duplicated().any():
+        raise ValueError("state calibration contains duplicate dates")
+    panel["date"] = pd.to_datetime(panel["block_date_time"]).dt.normalize()
+    panel = panel.merge(state_rates, on="date", how="left", validate="many_to_one")
+    calibration_columns = [
+        "new_accounts_per_block",
+        "new_delegation_indicators_per_block",
+    ]
+    if panel[calibration_columns].isna().any().any():
+        missing_dates = panel.loc[
+            panel[calibration_columns].isna().any(axis=1), "date"
+        ].dt.strftime("%Y-%m-%d").unique()
+        raise ValueError(
+            "state calibration does not cover panel dates: "
+            + ", ".join(missing_dates)
+        )
+
+    daily_txs = panel.groupby("date")["tx_count"].transform("sum")
+    if (daily_txs <= 0).any():
+        raise ValueError("a panel day contains no transactions")
+
+    # Preserve each day's RPC-calibrated totals while using cheap block-level
+    # activity to allocate the unobserved components. Account creation is routed
+    # in proportion to all transactions; delegation indicators are routed in
+    # proportion to type-4 transactions. A capacity-constrained allocation
+    # prevents sampled mean counts from assigning more state gas to a low-gas
+    # block than that block could have carried. Delegation gas is routed first
+    # because type-4 activity is its more specific observable proxy.
+    panel["base_state_creation_gas"] = (
+        20_000 * panel.new_storage_slots + 200 * panel.code_bytes
+    )
+    panel["cal_new_accounts"] = 0.0
+    panel["cal_new_delegation_indicators"] = 0.0
+    for _, positions in panel.groupby("date", sort=False).indices.items():
+        positions = np.asarray(positions, dtype=int)
+        day = panel.iloc[positions]
+        capacity = (
+            day["gas_used"].fillna(0)
+            - day["standard_calldata_gas"]
+            - day["eip7623_floor_uplift"]
+            - day["base_state_creation_gas"]
+        ).to_numpy(dtype=float)
+        if (capacity < -1e-7).any():
+            raise ValueError("observed storage/code state gas exceeds a block gas budget")
+        capacity = capacity.clip(min=0.0)
+        n_blocks = float(len(day))
+        delegation_gas = allocate_weighted_with_caps(
+            float(day["new_delegation_indicators_per_block"].iloc[0])
+            * n_blocks
+            * 12_500,
+            day["type4_tx_count"].to_numpy(dtype=float),
+            capacity,
+        )
+        capacity -= delegation_gas
+        account_gas = allocate_weighted_with_caps(
+            float(day["new_accounts_per_block"].iloc[0]) * n_blocks * 25_000,
+            day["tx_count"].to_numpy(dtype=float),
+            capacity,
+        )
+        panel.loc[panel.index[positions], "cal_new_delegation_indicators"] = (
+            delegation_gas / 12_500
+        )
+        panel.loc[panel.index[positions], "cal_new_accounts"] = account_gas / 25_000
+
+    # Current-rule resource split, matching the calibrated daily accounting:
+    # data gas includes the EIP-7623 floor only for floor-bound transactions;
+    # state combines block-observed storage/code with calibrated account and
+    # delegation proxies; execution is the intrinsic-inclusive remainder. The
+    # calibrated additions reproduce the daily totals but remain proxy
+    # allocations rather than observed per-block counts.
     panel["data_gas_current"] = panel.standard_calldata_gas + panel.eip7623_floor_uplift
     panel["state_creation_gas"] = (
-        20_000 * panel.new_storage_slots + 200 * panel.code_bytes
+        panel.base_state_creation_gas
+        + 25_000 * panel.cal_new_accounts
+        + 12_500 * panel.cal_new_delegation_indicators
     )
     panel["execution_gas"] = (
         panel.gas_used.fillna(0) - panel.data_gas_current - panel.state_creation_gas

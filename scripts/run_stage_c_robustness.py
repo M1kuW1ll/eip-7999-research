@@ -28,15 +28,13 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from dynamics.batched_replay import BatchConfig, run_batch, GWEI, MIN_BASE_FEE_PER_GAS  # noqa: E402
-from dynamics.empirical_shocks import (  # noqa: E402
-    DEFAULT_BLOCK_LENGTH, build_shock_panel, moving_block_bootstrap,
-)
+from run_multiscale_design_surface import build_canonical_workload  # noqa: E402
 from run_stage_a_screening import bundle_cost_equivalent_start  # noqa: E402
 
 BLOCKS_PER_DAY = 7_200
 WARM_BURN_IN = 20_000
 MEASURE_BLOCKS = 7 * BLOCKS_PER_DAY
-N_SEEDS = 64
+N_SEEDS = 32
 STATE_TARGET = 75_000_000.0
 
 DESIGNS = [
@@ -44,6 +42,7 @@ DESIGNS = [
     ("E225_D45", 225e6, 45e6, 90e6),
     ("E250_D60", 250e6, 60e6, 90e6),
     ("E300_D77", 300e6, 77e6, 90e6),
+    ("E300_D80", 300e6, 80e6, 90e6),
     ("E300_D85", 300e6, 85e6, 90e6),
 ]
 LAMBDA_GRID = (0.0, 0.5, 1.0)
@@ -118,19 +117,17 @@ def main() -> None:
         for f in cfg.__dataclass_fields__.values()
     })
     warm = run_batch(warm_cfg, np.ones((n_combos, WARM_BURN_IN, 4)),
-                     bundle_cost_equivalent_start(warm_cfg))
+                     bundle_cost_equivalent_start(warm_cfg), bundle_consistent=True)
     start_fees = np.repeat(warm["final_base_fee_wei"], N_SEEDS, axis=0)
 
-    panel = build_shock_panel(
-        ROOT / "data/contiguous/contiguous_block_panel_2026-05-18_14d.csv",
-        [ROOT / "data/contiguous/contiguous_runtime_bal_full14d_25118359_25218797.csv"],
-        ROOT / "data/7999/bal_decomposition_demand_parameters.csv",
+    shocks = build_canonical_workload().paths
+    out = run_batch(
+        cfg,
+        shocks,
+        start_fees,
+        burn_in=BLOCKS_PER_DAY,
+        bundle_consistent=True,
     )
-    shocks = moving_block_bootstrap(
-        panel, N_SEEDS, MEASURE_BLOCKS, DEFAULT_BLOCK_LENGTH,
-        np.random.default_rng(20260809),
-    )
-    out = run_batch(cfg, shocks, start_fees)
     print("replay complete")
 
     rows = []
@@ -145,16 +142,36 @@ def main() -> None:
         rows.append({
             "design": name, "window_days": int(spec.window_days),
             "lambda_bal": spec.lambda_bal, "rho_A": spec.rho_A,
-            "execution_target": execution_target, "data_limit": data_limit,
+            "eps_execution": spec.eps_execution,
+            "eps_data": spec.eps_data,
+            "eps_state": spec.eps_state,
+            "execution_target": execution_target,
+            "execution_limit": 2.0 * execution_target,
+            "data_target": data_target,
+            "data_limit": data_limit,
+            "state_target": STATE_TARGET,
             "no_bal_execution_ceiling": ceiling,
             "regime": "demand_constrained" if ceiling < execution_target else "capacity_constrained",
             "execution_fill": float(fills.mean()),
             "execution_fill_ci95": 1.96 * float(np.std(fills, ddof=1)) / np.sqrt(N_SEEDS),
-            "execution_floor_fraction": float(out["floor_fraction"][sl, 0].mean()),
+            "data_fill": float(out["mean_used"][sl, 1].mean() / data_target),
+            "state_fill": float(out["mean_used"][sl, 2].mean() / STATE_TARGET),
+            "included_execution": float(out["mean_used"][sl, 0].mean()),
+            "included_data": float(out["mean_used"][sl, 1].mean()),
+            "included_state": float(out["mean_used"][sl, 2].mean()),
+            "execution_floor_bounded_fraction": float(
+                out["floor_downward_pressure_fraction"][sl, 0].mean()
+            ),
             "mean_execution_fee_wei": float(out["mean_fee_wei"][sl, 0].mean()),
+            "mean_data_fee_wei": float(out["mean_fee_wei"][sl, 1].mean()),
+            "mean_state_fee_wei": float(out["mean_fee_wei"][sl, 2].mean()),
             "data_limit_hit_fraction": float(out["limit_hit_fraction"][sl, 1].mean()),
+            "any_limit_hit_fraction": float(out["any_limit_hit_fraction"][sl].mean()),
+            "rationed_execution": float(out["mean_rationed"][sl, 0].mean()),
             "rationed_data": float(out["mean_rationed"][sl, 1].mean()),
+            "fee_sd_execution": float(out["log_return_sd"][sl, 0].mean()),
             "fee_sd_data": float(out["log_return_sd"][sl, 1].mean()),
+            "fee_sd_state": float(out["log_return_sd"][sl, 2].mean()),
         })
 
     results = pd.DataFrame(rows)
@@ -162,12 +179,90 @@ def main() -> None:
     results.to_csv(out_path, index=False)
     print(f"wrote {out_path.relative_to(ROOT)}  ({len(results)} rows)")
 
+    # Paired, one-at-a-time slices around the central specification. The full
+    # 36-case grid above remains the interaction check; this table is the
+    # interpretable comparison used in the report and figure.
+    slices = []
+    slice_specs = (
+        ("elasticity_window", (results.lambda_bal == 0.0) & (results.rho_A == 1.0)),
+        ("rho_A", (results.window_days == 35) & (results.lambda_bal == 0.0)),
+        ("lambda", (results.window_days == 35) & (results.rho_A == 1.0)),
+    )
+    for sensitivity, mask in slice_specs:
+        part = results.loc[mask].copy()
+        part["sensitivity"] = sensitivity
+        part["is_central"] = (
+            (part.window_days == 35)
+            & (part.lambda_bal == 0.0)
+            & (part.rho_A == 1.0)
+        )
+        if sensitivity == "elasticity_window":
+            part["setting"] = part.window_days.map(lambda value: f"{int(value)} days")
+            part["setting_order"] = part.window_days
+        elif sensitivity == "rho_A":
+            part["setting"] = part.rho_A.map(lambda value: f"{value:g}")
+            part["setting_order"] = part.rho_A
+        else:
+            part["setting"] = part.lambda_bal.map(lambda value: f"{value:g}")
+            part["setting_order"] = part.lambda_bal
+        slices.append(part)
+
+    one_at_a_time = pd.concat(slices, ignore_index=True)
+    central_metrics = results.loc[
+        (results.window_days == 35)
+        & (results.lambda_bal == 0.0)
+        & (results.rho_A == 1.0),
+        [
+            "design", "execution_fill", "data_limit_hit_fraction",
+            "execution_floor_bounded_fraction", "rationed_data", "fee_sd_data",
+        ],
+    ].rename(columns={
+        column: f"central_{column}"
+        for column in (
+            "execution_fill", "data_limit_hit_fraction",
+            "execution_floor_bounded_fraction", "rationed_data", "fee_sd_data",
+        )
+    })
+    one_at_a_time = one_at_a_time.merge(
+        central_metrics, on="design", how="left", validate="many_to_one"
+    )
+    for metric in (
+        "execution_fill", "data_limit_hit_fraction",
+        "execution_floor_bounded_fraction", "rationed_data", "fee_sd_data",
+    ):
+        one_at_a_time[f"delta_{metric}"] = (
+            one_at_a_time[metric] - one_at_a_time[f"central_{metric}"]
+        )
+    one_at_a_time = one_at_a_time.sort_values(
+        ["design", "sensitivity", "setting_order"]
+    )
+    expected_sizes = {
+        "elasticity_window": 4,
+        "rho_A": len(RHO_A_GRID),
+        "lambda": len(LAMBDA_GRID),
+    }
+    observed_sizes = one_at_a_time.groupby(
+        ["design", "sensitivity"]
+    ).size()
+    for (_design, sensitivity), size in observed_sizes.items():
+        assert size == expected_sizes[sensitivity]
+    assert int(one_at_a_time.is_central.sum()) == len(DESIGNS) * 3
+    delta_columns = [
+        column for column in one_at_a_time.columns if column.startswith("delta_")
+    ]
+    assert np.allclose(
+        one_at_a_time.loc[one_at_a_time.is_central, delta_columns], 0.0
+    )
+    slice_path = ROOT / "data/7999/stage_c_one_at_a_time.csv"
+    one_at_a_time.to_csv(slice_path, index=False)
+    print(f"wrote {slice_path.relative_to(ROOT)}  ({len(one_at_a_time)} rows)")
+
     e300 = results[results.execution_target == 300e6]
     print("\ndemand-constrained signature check, 300M designs:")
     for regime, group in e300.groupby("regime"):
         print(f"  {regime:22s} n={len(group):3d}  "
               f"execution fee {group.mean_execution_fee_wei.min():.2f}-{group.mean_execution_fee_wei.max():.2f} wei  "
-              f"floor {group.execution_floor_fraction.min():.3f}-{group.execution_floor_fraction.max():.3f}  "
+              f"bounded {group.execution_floor_bounded_fraction.min():.3f}-{group.execution_floor_bounded_fraction.max():.3f}  "
               f"fill {group.execution_fill.min():.3f}-{group.execution_fill.max():.3f}")
 
 

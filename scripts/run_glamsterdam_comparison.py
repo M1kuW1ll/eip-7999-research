@@ -32,9 +32,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from dynamics.batched_replay import BatchConfig, run_batch, GWEI  # noqa: E402
 from dynamics.glamsterdam_replay import GlamsterdamConfig, run_glamsterdam_batch  # noqa: E402
-from dynamics.empirical_shocks import (  # noqa: E402
-    DEFAULT_BLOCK_LENGTH, build_shock_panel, moving_block_bootstrap,
-)
+from run_multiscale_design_surface import build_canonical_workload  # noqa: E402
 from run_stage_a_screening import bundle_cost_equivalent_start  # noqa: E402
 
 BLOCKS_PER_DAY = 7_200
@@ -43,22 +41,19 @@ MEASURE_BLOCKS = 7 * BLOCKS_PER_DAY
 N_SEEDS = 32
 STATE_TARGET = 75_000_000.0
 EPS = {"execution": 0.121160, "data": 0.229476, "state": 0.334864}
+REPORT_SHOCK_SEED = 20260814
 
 GLAMSTERDAM_CENTRAL_LIMIT = 200e6
 GLAMSTERDAM_SWEEP = (100e6, 150e6, 200e6, 300e6, 450e6, 600e6)
 
-# The data limit is a fixed protocol constant, so every design shares it and
-# only the targets vary. E225/D45 is the central case: at a conventional half
-# target ratio it is the largest execution target the data side actually
-# supports, delivering 223.3M at 99.3% utilisation. Raising T_E to 250M buys
-# only 12M more throughput and does so by configuring a target that cannot be
-# met: fill drops to 94% and the execution fee falls to its one-wei floor in 80%
-# of blocks rather than 13%.
+# The data limit is fixed within the comparison. The EIP-7999 points are
+# illustrative operating regimes rather than pass/fail selections.
 DATA_LIMIT = 90e6
 DESIGNS = [
-    ("E200_D45", 200e6, 45e6, DATA_LIMIT),
+    ("E200_D36", 200e6, 36e6, DATA_LIMIT),
     ("E225_D45", 225e6, 45e6, DATA_LIMIT),
     ("E250_D60", 250e6, 60e6, DATA_LIMIT),
+    ("E300_D80", 300e6, 80e6, DATA_LIMIT),
 ]
 
 # Representative bundles in historical gas-equivalent units, so the mechanisms
@@ -123,15 +118,7 @@ def main() -> None:
     anchor = pd.read_csv(ROOT / "data/7999/data_metering_runtime_bal_anchor.csv").iloc[0]
     glam = pd.read_csv(ROOT / "data/glamsterdam/equilibrium_anchor.csv").iloc[0]
 
-    panel = build_shock_panel(
-        ROOT / "data/contiguous/contiguous_block_panel_2026-05-18_14d.csv",
-        [ROOT / "data/contiguous/contiguous_runtime_bal_full14d_25118359_25218797.csv"],
-        ROOT / "data/7999/bal_decomposition_demand_parameters.csv",
-    )
-    shocks = moving_block_bootstrap(
-        panel, N_SEEDS, MEASURE_BLOCKS + BURN_IN, DEFAULT_BLOCK_LENGTH,
-        np.random.default_rng(20260810),
-    )
+    shocks = build_canonical_workload().paths
     start_fee = np.full(N_SEEDS, float(glam.base_fee_ref_wei))
     glam_multipliers = {"execution": float(glam.m_execution),
                         "data": float(glam.m_data), "state": float(glam.m_state)}
@@ -153,7 +140,7 @@ def main() -> None:
             "shared_fee_wei": shared,
             "fee_sd": float(out["log_return_sd"][:, 0].mean()),
             "limit_hit_fraction": float(out["limit_hit_fraction"][:, 1].mean()),
-            "rationed": float(out["mean_rationed"][:, 1].mean()),
+            "rationed": float(out["mean_rationed_data"].mean()),
             "regular_binding_fraction": float(out["regular_binding_fraction"].mean()),
             **bundle_costs({r: shared for r in EPS}, glam_multipliers, "cost"),
         })
@@ -161,7 +148,10 @@ def main() -> None:
     for design in DESIGNS:
         name, execution_target, data_target, data_limit = design
         cfg = seven999_config(design, N_SEEDS, demand, anchor)
-        out = run_batch(cfg, shocks, bundle_cost_equivalent_start(cfg), burn_in=BURN_IN)
+        out = run_batch(
+            cfg, shocks, bundle_cost_equivalent_start(cfg), burn_in=BURN_IN,
+            bundle_consistent=True,
+        )
         fees = {"execution": float(out["mean_fee_wei"][:, 0].mean()),
                 "data": float(out["mean_fee_wei"][:, 1].mean()),
                 "state": float(out["mean_fee_wei"][:, 2].mean())}

@@ -23,20 +23,20 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from dynamics.batched_replay import BatchConfig, run_batch  # noqa: E402
-from dynamics.empirical_shocks import (  # noqa: E402
-    DEFAULT_BLOCK_LENGTH, build_shock_panel, moving_block_bootstrap,
-)
+from run_multiscale_design_surface import build_canonical_workload  # noqa: E402
 from run_stage_a_screening import bundle_cost_equivalent_start  # noqa: E402
 
 BLOCKS_PER_DAY = 7_200
 BURN_IN = BLOCKS_PER_DAY
 MEASURE_BLOCKS = 7 * BLOCKS_PER_DAY
-N_SEEDS = 48
+N_SEEDS = 32
 STATE_TARGET = 75_000_000.0
 EPS = {"execution": 0.121160, "data": 0.229476, "state": 0.334864}
 
 DATA_LIMIT = 90e6
-TARGET_RATIOS = (0.25, 0.333, 0.40, 0.50, 0.583, 0.667, 0.75, 0.855, 0.944)
+TARGET_RATIOS = (
+    0.25, 0.333, 0.40, 0.50, 0.583, 0.667, 0.75, 0.855, 80 / 90, 0.944,
+)
 
 # Execution target the static one-wei frontier supports at each data target,
 # interpolated from the reference frontier in the equilibrium report.
@@ -56,15 +56,7 @@ def main() -> None:
     execution_targets = supported_execution(data_targets)
     n = len(data_targets)
 
-    panel = build_shock_panel(
-        ROOT / "data/contiguous/contiguous_block_panel_2026-05-18_14d.csv",
-        [ROOT / "data/contiguous/contiguous_runtime_bal_full14d_25118359_25218797.csv"],
-        ROOT / "data/7999/bal_decomposition_demand_parameters.csv",
-    )
-    shocks = moving_block_bootstrap(
-        panel, N_SEEDS, MEASURE_BLOCKS + BURN_IN, DEFAULT_BLOCK_LENGTH,
-        np.random.default_rng(20260811),
-    )
+    shocks = build_canonical_workload().paths
 
     repeat = lambda values: np.repeat(np.asarray(values, dtype=float), N_SEEDS)
     ones = np.ones(n * N_SEEDS)
@@ -84,7 +76,10 @@ def main() -> None:
         g_static_0=float(anchor.static_data_gas_per_block),
         p0_gwei=float(demand.base_fee_ref_gwei),
     )
-    out = run_batch(cfg, shocks, bundle_cost_equivalent_start(cfg), burn_in=BURN_IN)
+    out = run_batch(
+        cfg, shocks, bundle_cost_equivalent_start(cfg), burn_in=BURN_IN,
+        bundle_consistent=True,
+    )
 
     rows = []
     for i in range(n):

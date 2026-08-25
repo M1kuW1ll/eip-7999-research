@@ -16,7 +16,10 @@ data/7999/*
 !data/7999/glamsterdam_comparison.csv
 !data/7999/fixed_data_limit_sweep.csv
 !data/7999/design_surface.csv
+!data/7999/design_surface_selected_settings.csv
 !data/7999/mechanism_comparison.csv
+!data/7999/stage_c_one_at_a_time.csv
+!data/7999/block_length_sensitivity.csv
 *.parquet
 
 # Superseded research material retained locally only
@@ -57,8 +60,17 @@ markdowns/demand_model_plan.md
 !/plots/dynamic_saturation_pathology.png
 !/plots/dynamic_mechanism_frontier.png
 !/plots/dynamic_design_grid.png
+!/plots/dynamic_execution_support_grid.png
+!/plots/dynamic_data_limit_pressure_grid.png
+!/plots/dynamic_price_variation_grid.png
 !/plots/dynamic_candidates.png
 !/plots/dynamic_mechanism_comparison.png
+!/plots/dynamic_parameter_sensitivity.png
+!/plots/slot_time_substitution.png
+!/plots/slot_time_two_designs.png
+!/plots/slot_time_delivered_execution_grid.png
+!/plots/slot_time_fixed_designs.png
+!/plots/slot_time_outcome_tradeoffs.png
 
 # Contiguous empirical shock panels are large regenerable pulls; the builder
 # scripts and the block ranges in the manifest reproduce them.

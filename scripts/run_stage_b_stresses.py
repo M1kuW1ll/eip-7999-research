@@ -28,9 +28,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from dynamics.batched_replay import BatchConfig, run_batch, GWEI  # noqa: E402
-from dynamics.empirical_shocks import (  # noqa: E402
-    DEFAULT_BLOCK_LENGTH, build_shock_panel, moving_block_bootstrap,
-)
+from run_multiscale_design_surface import build_canonical_workload  # noqa: E402
 from run_stage_a_screening import bundle_cost_equivalent_start  # noqa: E402
 
 BLOCKS_PER_DAY = 7_200
@@ -45,6 +43,7 @@ SHORTLIST = [
     ("E225_D45", 225e6, 45e6, 90e6),
     ("E250_D60", 250e6, 60e6, 90e6),
     ("E300_D77", 300e6, 77e6, 90e6),
+    ("E300_D80", 300e6, 80e6, 90e6),
     ("E300_D85", 300e6, 85e6, 90e6),
 ]
 
@@ -100,16 +99,10 @@ def main() -> None:
     anchor = pd.read_csv(ROOT / "data/7999/data_metering_runtime_bal_anchor.csv").iloc[0]
     eps = {"execution": 0.121160, "data": 0.229476, "state": 0.334864}
 
-    panel = build_shock_panel(
-        ROOT / "data/contiguous/contiguous_block_panel_2026-05-18_14d.csv",
-        [ROOT / "data/contiguous/contiguous_runtime_bal_full14d_25118359_25218797.csv"],
-        ROOT / "data/7999/bal_decomposition_demand_parameters.csv",
-    )
-
     # Warm start: converge each design under unit shocks to its own equilibrium.
     warm_cfg = make_config(SHORTLIST, eps, 1, demand, anchor)
     warm = run_batch(warm_cfg, np.ones((len(SHORTLIST), WARM_BURN_IN, 4)),
-                     bundle_cost_equivalent_start(warm_cfg))
+                     bundle_cost_equivalent_start(warm_cfg), bundle_consistent=True)
     warm_fees = warm["final_base_fee_wei"]
     print("warm-start equilibria reached under unit shocks:")
     for i, (name, execution_target, *_rest) in enumerate(SHORTLIST):
@@ -118,10 +111,7 @@ def main() -> None:
               f"  state {warm_fees[i,2]:12,.0f}   execution fill {fill:.4f}")
 
     cfg = make_config(SHORTLIST, eps, N_SEEDS, demand, anchor)
-    base_shocks = moving_block_bootstrap(
-        panel, N_SEEDS, STRESS_BLOCKS, DEFAULT_BLOCK_LENGTH,
-        np.random.default_rng(20260808),
-    )
+    base_shocks = build_canonical_workload().paths[:N_SEEDS, :STRESS_BLOCKS]
     tiled = base_shocks
 
     starts = {
@@ -134,7 +124,10 @@ def main() -> None:
         pulse = stress_multiplier(amplitudes, half_life, STRESS_BLOCKS)
         shocks = tiled * pulse[None, :, :]
         for start_name, start_fees in starts.items():
-            out = run_batch(cfg, shocks, start_fees, return_paths=True)
+            out = run_batch(
+                cfg, shocks, start_fees, return_paths=True,
+                bundle_consistent=True,
+            )
             fee_paths = out["fee_paths"]
             for i, (name, execution_target, data_target, data_limit) in enumerate(SHORTLIST):
                 sl = slice(i * N_SEEDS, (i + 1) * N_SEEDS)
@@ -153,10 +146,21 @@ def main() -> None:
                     "recovery_blocks_median": float(np.nanmedian(recovery)),
                     "recovery_fraction": float(np.mean(~np.isnan(recovery))),
                     "data_limit_hit_fraction": float(out["limit_hit_fraction"][sl, 1].mean()),
+                    "data_offered_limit_pressure_fraction": float(
+                        out["offered_limit_pressure_fraction"][sl, 1].mean()
+                    ),
+                    "data_cap_active_fraction": float(
+                        out["cap_active_fraction"][sl, 1].mean()
+                    ),
+                    "data_scale_determining_fraction": float(
+                        out["scale_determining_fraction"][sl, 1].mean()
+                    ),
                     "longest_data_limit_run": float(out["longest_limit_run"][sl, 1].mean()),
                     "rationed_data": float(out["mean_rationed"][sl, 1].mean()),
                     "execution_fill": float(out["mean_used"][sl, 0].mean() / execution_target),
-                    "execution_floor_fraction": float(out["floor_fraction"][sl, 0].mean()),
+                    "execution_floor_bounded_fraction": float(
+                        out["floor_downward_pressure_fraction"][sl, 0].mean()
+                    ),
                 })
         print(f"  stress '{stress}' done")
 

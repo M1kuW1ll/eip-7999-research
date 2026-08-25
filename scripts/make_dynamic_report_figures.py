@@ -26,9 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from dynamics.batched_replay import BatchConfig, run_batch  # noqa: E402
-from dynamics.empirical_shocks import (  # noqa: E402
-    DEFAULT_BLOCK_LENGTH, build_shock_panel, moving_block_bootstrap,
-)
+from run_multiscale_design_surface import build_canonical_workload  # noqa: E402
 from run_stage_a_screening import bundle_cost_equivalent_start  # noqa: E402
 
 PLOTS = ROOT / "plots"
@@ -41,6 +39,7 @@ EPS = {"execution": 0.121160, "data": 0.229476, "state": 0.334864}
 DESIGNS = [
     ("E200/D45", 200e6, 45e6), ("E225/D45", 225e6, 45e6),
     ("E250/D60", 250e6, 60e6), ("E300/D77", 300e6, 77e6),
+    ("E300/D80", 300e6, 80e6),
     ("E300/D85", 300e6, 85e6),
 ]
 RESOURCE_HUES = {"execution": "#4C78A8", "data": "#F58518", "state": "#72B7B2"}
@@ -85,23 +84,25 @@ def build(designs, batch_repeat, demand, anchor):
 def main() -> None:
     demand = pd.read_csv(ROOT / "data/7999/bal_decomposition_demand_parameters.csv").iloc[0]
     anchor = pd.read_csv(ROOT / "data/7999/data_metering_runtime_bal_anchor.csv").iloc[0]
-    panel = build_shock_panel(
-        ROOT / "data/contiguous/contiguous_block_panel_2026-05-18_14d.csv",
-        [ROOT / "data/contiguous/contiguous_runtime_bal_full14d_25118359_25218797.csv"],
-        ROOT / "data/7999/bal_decomposition_demand_parameters.csv",
-    )
+    canonical_shocks = build_canonical_workload().paths
     n_blocks = 2 * BLOCKS_PER_DAY
-    shocks = moving_block_bootstrap(panel, N_SEEDS, n_blocks, DEFAULT_BLOCK_LENGTH,
-                                    np.random.default_rng(20260813))
+    shocks = canonical_shocks[:, :n_blocks]
     cfg = build(DESIGNS, N_SEEDS, demand, anchor)
     colours = design_ramp(len(DESIGNS))
 
     # Warm equilibrium per design, then cold and warm replays with paths kept.
     warm_cfg = build(DESIGNS, 1, demand, anchor)
     warm_fees = run_batch(warm_cfg, np.ones((len(DESIGNS), 20_000, 4)),
-                          bundle_cost_equivalent_start(warm_cfg))["final_base_fee_wei"]
-    cold = run_batch(cfg, shocks, bundle_cost_equivalent_start(cfg), return_paths=True)
-    warm = run_batch(cfg, shocks, np.repeat(warm_fees, N_SEEDS, axis=0), return_paths=True)
+                          bundle_cost_equivalent_start(warm_cfg),
+                          bundle_consistent=True)["final_base_fee_wei"]
+    cold = run_batch(
+        cfg, shocks, bundle_cost_equivalent_start(cfg), return_paths=True,
+        bundle_consistent=True,
+    )
+    warm = run_batch(
+        cfg, shocks, np.repeat(warm_fees, N_SEEDS, axis=0), return_paths=True,
+        bundle_consistent=True,
+    )
 
     hours = np.arange(n_blocks) * 12 / 3600
 
@@ -177,8 +178,23 @@ def main() -> None:
     plt.close(fig)
 
     # ---- Figure 2: steady state around equilibrium ----------------------
+    # Use the canonical report seed and the same one-day burn-in plus seven-day
+    # measurement window as the design grid and mechanism comparison. Keeping
+    # only the reference design controls memory while making repeated E225/D45
+    # quantities numerically identical across the report.
+    steady_blocks = 8 * BLOCKS_PER_DAY
+    steady_design = [DESIGNS[reference]]
+    steady_cfg = build(steady_design, N_SEEDS, demand, anchor)
+    steady_shocks = canonical_shocks[:, :steady_blocks]
+    steady = run_batch(
+        steady_cfg,
+        steady_shocks,
+        np.repeat(warm_fees[reference : reference + 1], N_SEEDS, axis=0),
+        return_paths=True,
+        bundle_consistent=True,
+    )
     fig, axes = plt.subplots(1, 2, figsize=(13.5, 5.0))
-    sl = slice(reference * N_SEEDS, (reference + 1) * N_SEEDS)
+    sl = slice(0, N_SEEDS)
     settled = slice(BLOCKS_PER_DAY, None)
 
     ax = axes[0]
@@ -190,7 +206,7 @@ def main() -> None:
     # settles near 2e6 wei, where the same integer grid is effectively
     # continuous. A CDF treats both correctly and needs no bin choice.
     for j, resource in enumerate(("execution", "data", "state")):
-        series = np.sort(warm["fee_paths"][sl, settled, j].ravel())
+        series = np.sort(steady["fee_paths"][sl, settled, j].ravel())
         p5, p95 = np.percentile(series, [5, 95])
         span = (f"{p5/1e6:.2g}–{p95/1e6:.1f}M wei" if p95 > 1e5
                 else f"{p5:,.0f}–{p95:,.0f} wei")
@@ -202,7 +218,7 @@ def main() -> None:
         ax.axhline(level, color=GRID, linewidth=0.8, linestyle=":")
     ax.set_xlabel("base fee relative to its median, log$_{10}$")
     ax.set_ylabel("fraction of blocks below")
-    ax.set_title("All three fees span more than a decade")
+    ax.set_title("Broad fee distributions under separate pricing")
     ax.legend(frameon=False, loc="upper left", title="90% of blocks lie in",
               title_fontsize=11)
     ax.grid(alpha=0.5)
@@ -211,7 +227,7 @@ def main() -> None:
     targets = {"execution": DESIGNS[reference][1], "data": DESIGNS[reference][2],
                "state": STATE_TARGET}
     for j, resource in enumerate(("execution", "data", "state")):
-        series = warm["used_paths"][sl, settled, j].ravel() / targets[resource]
+        series = steady["used_paths"][sl, settled, j].ravel() / targets[resource]
         ax.hist(series, bins=70, histtype="step", linewidth=1.8,
                 color=RESOURCE_HUES[resource], label=resource, density=True)
     ax.axvline(1.0, color=INK_MUTED, linewidth=0.9, linestyle="--")
@@ -224,7 +240,7 @@ def main() -> None:
     ax.set_xlim(0, 2.6)
     ax.set_xlabel("included gas relative to target")
     ax.set_ylabel("density")
-    ax.set_title(f"Utilisation around target, {DESIGNS[reference][0]}")
+    ax.set_title(f"Utilization around target, {DESIGNS[reference][0]}")
     ax.legend(frameon=False)
     ax.grid(alpha=0.5)
     fig.tight_layout()
@@ -250,8 +266,8 @@ def main() -> None:
     axes[0].legend(frameon=False, fontsize=11)
     axes[0].grid(alpha=0.5)
     axes[1].set_xlabel("data target ratio  $T_D/L_D$")
-    axes[1].set_ylabel("fraction of blocks at the data limit")
-    axes[1].set_title("Congestion follows the ratio, not the execution target")
+    axes[1].set_ylabel("fraction of blocks included at the data limit")
+    axes[1].set_title("Included-limit frequency follows the target ratio")
     axes[1].annotate("all seven execution targets\ncollapse onto one curve",
                      xy=(0.30, 0.36), color=INK_MUTED, fontsize=11)
     axes[1].grid(alpha=0.5)
@@ -273,15 +289,21 @@ def main() -> None:
     # The two coincident designs sit on top of each other in the congestion
     # panel and are well separated in the price panel, so the offsets differ by
     # panel rather than being shared.
-    offsets_congestion = {"E200_D45": (11, -11), "E225_D45": (11, 4), "E250_D60": (0, 11),
-                          "E300_D77": (0, 11), "E300_D85": (0, 11)}
-    offsets_price = {"E200_D45": (11, -4), "E225_D45": (11, -4), "E250_D60": (0, 11),
-                     "E300_D77": (0, 11), "E300_D85": (0, 11)}
+    offsets_congestion = {
+        "E200_D45": (11, -11), "E225_D45": (11, 4),
+        "E250_D60": (0, 11), "E300_D77": (-5, 11),
+        "E300_D80": (9, 4), "E300_D85": (0, 11),
+    }
+    offsets_price = {
+        "E200_D45": (11, -4), "E225_D45": (11, -4),
+        "E250_D60": (0, 11), "E300_D77": (-5, 11),
+        "E300_D80": (9, 4), "E300_D85": (0, 11),
+    }
     fig, axes = plt.subplots(1, 2, figsize=(13.5, 5.0), sharex=True)
     for ax, column, title, ylabel, label_offsets in (
-        (axes[0], "data_limit_hit_fraction", "Congestion rises with the target ratio",
-         "fraction of blocks at the data limit", offsets_congestion),
-        (axes[1], "peak_data_fee_multiple", "but past two thirds the price response collapses",
+        (axes[0], "data_limit_hit_fraction", "Included-limit frequency rises with the target ratio",
+         "fraction of blocks included at the data limit", offsets_congestion),
+        (axes[1], "peak_data_fee_multiple", "Price response collapses past two-thirds",
          "peak data-fee multiple within a day", offsets_price),
     ):
         ax.scatter(stage_b.ratio, stage_b[column], color="#B22222", s=58, zorder=3)
@@ -326,12 +348,12 @@ def main() -> None:
     # creation with it, and no point on that curve reaches the region the
     # separately priced designs occupy.
     ax.annotate("separate fees reach a region no\nshared gas limit does: more execution\n"
-                "at a fraction of the state creation",
+                "at a fraction of the included state gas",
                 xy=(0.055, 0.70), xycoords="axes fraction", fontsize=11,
                 color=INK_MUTED, va="top")
-    ax.set_xlabel("state gas per block (M)")
+    ax.set_xlabel("included state gas per block (M)")
     ax.set_ylabel("delivered execution gas (M)")
-    ax.set_title("Execution bought per unit of state creation")
+    ax.set_title("Delivered execution per unit of included state gas")
     ax.legend(frameon=False, loc="upper right")
     ax.grid(alpha=0.5)
     ax.margins(x=0.09)
