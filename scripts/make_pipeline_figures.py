@@ -152,7 +152,7 @@ def figure_design_grids(surface):
     )
     label_grid_axes(axes)
     fig.suptitle(
-        "Execution support across the EIP-7999 target grid",
+        "Execution support at fixed $T_E/L_E=1/2$",
         fontsize=17, y=0.99,
     )
     fig.tight_layout(rect=(0, 0, 1, 0.94), w_pad=2.6)
@@ -173,7 +173,7 @@ def figure_design_grids(surface):
     )
     label_grid_axes(axes)
     fig.suptitle(
-        "Data-limit pressure and included-data composition",
+        "Data-limit pressure and composition at fixed $T_E/L_E=1/2$",
         fontsize=17,
         y=0.99,
     )
@@ -195,7 +195,7 @@ def figure_design_grids(surface):
     )
     label_grid_axes(axes)
     fig.suptitle(
-        "Block-to-block effective-price variation across the target grid",
+        "Effective-price variation at fixed $T_E/L_E=1/2$",
         fontsize=17, y=0.99,
     )
     fig.tight_layout(rect=(0, 0, 1, 0.94), w_pad=2.6)
@@ -210,7 +210,7 @@ def figure_combined_design_grid(
     surface,
     *,
     output_name="dynamic_design_grid.png",
-    title="EIP-7999 target grid under within-day demand shocks",
+    title: str | None = "EIP-7999 target grid under within-day demand shocks",
     png_dpi=160,
 ):
     """Draw the six target-grid outcomes and save compact PNG and vector PDF copies."""
@@ -278,8 +278,11 @@ def figure_combined_design_grid(
     for ax in axes[:, 0]:
         ax.set_ylabel("execution target  $T_E$ (M)", fontsize=14, labelpad=9)
 
-    fig.suptitle(title, fontsize=18, y=0.995)
-    fig.tight_layout(rect=(0, 0, 1, 0.965), h_pad=3.2, w_pad=2.4)
+    if title:
+        fig.suptitle(title, fontsize=18, y=0.995)
+        fig.tight_layout(rect=(0, 0, 1, 0.965), h_pad=3.2, w_pad=2.4)
+    else:
+        fig.tight_layout(h_pad=3.2, w_pad=2.4)
     output_path = PLOTS / output_name
     fig.savefig(output_path, dpi=png_dpi, bbox_inches="tight")
     fig.savefig(output_path.with_suffix(".pdf"), bbox_inches="tight")

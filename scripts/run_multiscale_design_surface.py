@@ -172,16 +172,19 @@ def _collect_rows(
             "execution_floor_bounded_fraction",
             result["floor_downward_pressure_fraction"][path_slice, 0],
         )
-        _add_interval(
-            row,
-            "execution_mean_absolute_target_deviation",
-            result["mean_absolute_target_deviation"][path_slice, 0],
-        )
-        _add_interval(
-            row,
-            "execution_mean_absolute_target_gap_gas",
-            result["mean_absolute_target_gap"][path_slice, 0],
-        )
+        for resource_index, resource in enumerate(RESOURCES):
+            _add_interval(
+                row,
+                f"{resource}_mean_absolute_target_deviation",
+                result["mean_absolute_target_deviation"][
+                    path_slice, resource_index
+                ],
+            )
+            _add_interval(
+                row,
+                f"{resource}_mean_absolute_target_gap_gas",
+                result["mean_absolute_target_gap"][path_slice, resource_index],
+            )
         _add_interval(row, "data_fee_sd", result["log_return_sd"][path_slice, 1])
         # Union over resources of "included usage reached the hard limit", i.e.
         # the block could not have carried more of anything.  Not recoverable

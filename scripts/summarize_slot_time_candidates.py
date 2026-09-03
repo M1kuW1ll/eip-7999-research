@@ -8,9 +8,12 @@ the marginal changes for the fixed E300/D80 diagnostic.
 
 The script separately defines a balanced-design benchmark.  It allows the
 fraction of blocks at or above 98% of either hard limit and the mean absolute
-execution distance from target to be at most 110% of their historical values.
+execution distance from target to be at most 120% of their historical values.
 It also requires the central reserve-free execution equilibrium to clear
 strictly above the one-wei protocol minimum.
+
+For the throughput comparison, the configuration with the highest mean
+delivered execution at each propagation time is retained.
 """
 
 from __future__ import annotations
@@ -23,7 +26,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "data/7999/slot_time_scenarios.csv"
 HISTORICAL_SOURCE = ROOT / "data/7999/historical_fee_market_benchmark.csv"
-HISTORICAL_TOLERANCE_MULTIPLIER = 1.10
+HISTORICAL_TOLERANCE_MULTIPLIER = 1.20
 MINIMUM_EXECUTION_BASE_FEE_WEI = 1.0
 INTERIOR_FEE_TOLERANCE_WEI = 1e-6
 STATE_TARGET = 75_000_000.0
@@ -256,6 +259,14 @@ def main() -> None:
             for _, split in historical_admissible.groupby("propagation_time_s")
         ]
     ).sort_values("propagation_time_s")
+    maximum_throughput = pd.DataFrame(
+        [
+            split.loc[split["included_execution"].idxmax()]
+            for _, split in data.loc[data["propagation_time_s"].ge(3.0)].groupby(
+                "propagation_time_s"
+            )
+        ]
+    ).sort_values("propagation_time_s")
 
     frontier_path = ROOT / "data/7999/slot_time_guardrail_frontier.csv"
     selection_path = ROOT / "data/7999/slot_time_guardrail_candidates.csv"
@@ -266,6 +277,9 @@ def main() -> None:
     historical_frontier_path = (
         ROOT / "data/7999/slot_time_historical_benchmark_frontier.csv"
     )
+    maximum_throughput_path = (
+        ROOT / "data/7999/slot_time_maximum_throughput.csv"
+    )
     missing_guardrail_path = (
         ROOT / "data/7999/slot_time_guardrail_missing_splits.csv"
     )
@@ -274,6 +288,7 @@ def main() -> None:
     marginal.to_csv(marginal_path, index=False)
     historical_admissible.to_csv(historical_admissible_path, index=False)
     historical_frontier.to_csv(historical_frontier_path, index=False)
+    maximum_throughput.to_csv(maximum_throughput_path, index=False)
 
     expected_pairs = pd.MultiIndex.from_product(
         [TIERS, sorted(data["propagation_time_s"].unique())],
@@ -303,6 +318,10 @@ def main() -> None:
     print(
         f"{len(historical_frontier)} rows -> "
         f"{historical_frontier_path.relative_to(ROOT)}"
+    )
+    print(
+        f"{len(maximum_throughput)} rows -> "
+        f"{maximum_throughput_path.relative_to(ROOT)}"
     )
     print(
         f"{len(missing_guardrails)} missing tier/split pairs -> "

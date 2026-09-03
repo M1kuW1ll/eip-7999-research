@@ -186,7 +186,7 @@ def main() -> None:
                  markersize=6, label="blocks full on execution")
     axes[0].set_ylabel("fraction of measured blocks")
     axes[0].yaxis.set_major_formatter(PercentFormatter(1.0))
-    axes[0].set_title("The binding limit changes hands")
+    axes[0].set_title("Fraction of blocks at data or execution limit")
     axes[0].legend(frameon=False, fontsize=11)
 
     axes[1].plot(diag.propagation_time_s, diag.included_execution / 1e6,
@@ -199,11 +199,11 @@ def main() -> None:
                          ha="center", fontsize=9.5, color=INK_MUTED)
     axes[1].set_ylim(bottom=diag.included_execution.min() / 1e6 - 3.0)
     axes[1].set_ylabel("delivered execution gas (M)")
-    axes[1].set_title("More propagation time delivers more execution")
+    axes[1].set_title("Delivered execution")
     for ax in axes:
         ax.set_xlabel("propagation time (s)")
         ax.grid(alpha=0.5)
-    fig.suptitle("Fixed targets E300/D80: only the limits move", y=1.02)
+    fig.suptitle("E300/D80 metrics under different propagation times", y=1.02)
     fig.tight_layout()
     fig.savefig(PLOTS / "slot_time_substitution.png", dpi=200,
                 bbox_inches="tight")
@@ -230,7 +230,7 @@ def main() -> None:
                                                           design_panels):
         for frame, colour, label in (
             (max_throughput, MAXC, "maximum throughput"),
-            (balanced_designs, BALC, "balanced design"),
+            (balanced_designs, BALC, "historically anchored"),
         ):
             ax.plot(frame.propagation_time_s, frame[column] * scale,
                     color=colour, linewidth=2.2, marker="o", markersize=6,
@@ -246,7 +246,9 @@ def main() -> None:
                 ax.set_ylim(bottom=0)
         ax.grid(alpha=0.5)
     axes[0, 0].legend(frameon=False, fontsize=11, loc="lower right")
-    fig.suptitle("Two selection standards across the slot-time splits", y=1.005)
+    fig.suptitle(
+        "Maximum-throughput and historically anchored candidates", y=1.005
+    )
     fig.tight_layout()
     fig.savefig(PLOTS / "slot_time_two_designs.png", dpi=200,
                 bbox_inches="tight")

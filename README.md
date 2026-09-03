@@ -23,6 +23,9 @@ Git-ignored `archived/` directory.
   metering, runtime-BAL decomposition, and bundle-priced parent demand.
 - `markdowns/bundle_priced_7999_equilibrium_report.md`: the bundle-priced
   EIP-7999 equilibrium and capacity frontier.
+- `markdowns/bundle_priced_7999_dynamic_and_slot_time_report.md`: block-level
+  EIP-7999 dynamics, target-grid results, physical slot-time allocation, and
+  sensitivity analysis.
 
 ## Active Notebook Sequence
 
@@ -32,6 +35,7 @@ Git-ignored `archived/` directory.
 |---|---|
 | `notebooks/resource_demand_and_glamsterdam_equilibrium/01`--`04` | Rebuild the data panels, calculate metering multipliers, estimate resource demand, and solve the Glamsterdam equilibrium. |
 | `notebooks/7999_equilibrium/01`--`03` | Rebuild static/runtime data metering, decompose BAL demand, and solve the bundle-priced EIP-7999 equilibrium. |
+| `notebooks/7999_simulation/01`--`04` | Construct the multiscale demand shocks, run the dynamic target grid, evaluate physical slot-time allocations, and reproduce the sensitivity analysis. |
 
 Each folder contains a README with credentials, refresh modes, handoff files,
 and a non-interactive execution command. Run each numbered sequence in order.
@@ -41,7 +45,6 @@ and a non-interactive execution command. Run each numbered sequence in order.
 | Notebook | Purpose |
 |---|---|
 | `notebooks/bandwidth-limit-scenarios.ipynb` | Derive propagation-based data limits. |
-| `notebooks/simulation/2.5-full-7999-bundle-priced-dynamic-replay.ipynb` | Run the bundle-priced EIP-7999 dynamic replay. |
 
 ## Core Accounting Conventions
 

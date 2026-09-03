@@ -31,7 +31,7 @@ def main() -> None:
     figure_combined_design_grid(
         surface,
         output_name="dynamic_multiscale_design_grid.png",
-        title="EIP-7999 target grid under the full multiscale workload",
+        title=None,
     )
 
     fig, axes = plt.subplots(1, 2, figsize=(17.0, 6.2))
@@ -52,12 +52,7 @@ def main() -> None:
         1.0,
     )
     label_grid_axes(axes)
-    fig.suptitle(
-        "Execution support under the full multiscale workload",
-        fontsize=17,
-        y=0.99,
-    )
-    fig.tight_layout(rect=(0, 0, 1, 0.94), w_pad=2.6)
+    fig.tight_layout(w_pad=2.6)
     fig.savefig(
         PLOTS / "dynamic_multiscale_execution_support_grid.png",
         dpi=200,
@@ -83,12 +78,7 @@ def main() -> None:
         1.0,
     )
     label_grid_axes(axes)
-    fig.suptitle(
-        "Data-limit pressure under the full multiscale workload",
-        fontsize=17,
-        y=0.99,
-    )
-    fig.tight_layout(rect=(0, 0, 1, 0.95), w_pad=2.6)
+    fig.tight_layout(w_pad=2.6)
     fig.savefig(
         PLOTS / "dynamic_multiscale_data_limit_pressure_grid.png",
         dpi=200,
@@ -114,12 +104,7 @@ def main() -> None:
         1.0,
     )
     label_grid_axes(axes)
-    fig.suptitle(
-        "Effective-price variation under the full multiscale workload",
-        fontsize=17,
-        y=0.99,
-    )
-    fig.tight_layout(rect=(0, 0, 1, 0.94), w_pad=2.6)
+    fig.tight_layout(w_pad=2.6)
     fig.savefig(
         PLOTS / "dynamic_multiscale_price_variation_grid.png",
         dpi=200,
