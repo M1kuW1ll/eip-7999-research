@@ -246,7 +246,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--chunk-size", type=int, default=200)
     parser.add_argument("--network", default="mainnet")
-    parser.add_argument("--execution-multiplier", type=float, default=1.537898)
+    parser.add_argument("--execution-multiplier", type=float, default=1.4479558695732846)
     parser.add_argument("--cpsb", type=int, default=1530)
     parser.add_argument(
         "--transaction-body-content",

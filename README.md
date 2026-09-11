@@ -21,11 +21,11 @@ Git-ignored `archived/` directory.
   metering multipliers, and the Glamsterdam equilibrium.
 - `markdowns/bundle_priced_bal_demand_model_report.md`: EIP-7999 static-data
   metering, runtime-BAL decomposition, and bundle-priced parent demand.
-- `markdowns/bundle_priced_7999_equilibrium_report.md`: the bundle-priced
-  EIP-7999 equilibrium and capacity frontier.
-- `markdowns/bundle_priced_7999_dynamic_and_slot_time_report.md`: block-level
+- `markdowns/When Data Binds Execution: Dynamic Simulation of EIP-7999’s Multidimensional Fee Market.md`: block-level
   EIP-7999 dynamics, target-grid results, physical slot-time allocation, and
   sensitivity analysis.
+- `markdowns/eip8279_floor_calibration_report.md`: one-dimensional baseline,
+  floor-adjusted EIP-8368/EIP-8372 simulations, and comparison with EIP-7999.
 
 ## Active Notebook Sequence
 
@@ -36,6 +36,7 @@ Git-ignored `archived/` directory.
 | `notebooks/resource_demand_and_glamsterdam_equilibrium/01`--`04` | Rebuild the data panels, calculate metering multipliers, estimate resource demand, and solve the Glamsterdam equilibrium. |
 | `notebooks/7999_equilibrium/01`--`03` | Rebuild static/runtime data metering, decompose BAL demand, and solve the bundle-priced EIP-7999 equilibrium. |
 | `notebooks/7999_simulation/01`--`04` | Construct the multiscale demand shocks, run the dynamic target grid, evaluate physical slot-time allocations, and reproduce the sensitivity analysis. |
+| `notebooks/one_dimensional_simulation/01`--`04` | Calibrate and simulate the baseline, floor-adjusted EIP-8368, and floor-adjusted EIP-8372 mechanisms, then reproduce their comparison with EIP-7999. |
 
 Each folder contains a README with credentials, refresh modes, handoff files,
 and a non-interactive execution command. Run each numbered sequence in order.

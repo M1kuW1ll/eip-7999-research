@@ -407,7 +407,7 @@ def build_bal_carrier_transaction_panel(
     gas_inputs: pd.DataFrame,
     transaction_body_content: pd.DataFrame | None = None,
     *,
-    execution_multiplier: float = 1.537898,
+    execution_multiplier: float = 1.4479558695732846,
     cpsb: int = EIP8037_CPSB,
     data_gas_per_byte: int = DATA_GAS_PER_BYTE,
 ) -> pd.DataFrame:

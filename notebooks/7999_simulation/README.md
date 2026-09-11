@@ -1,9 +1,7 @@
 # Bundle-priced EIP-7999 dynamic-simulation notebooks
 
 These four notebooks reproduce the tables and figures in
-`markdowns/bundle_priced_7999_dynamic_and_slot_time_report.md` and its
-publication-facing copy, *Dynamic Simulation of a Bundle-Priced EIP-7999
-Multidimensional Fee Market*.
+`markdowns/When Data Binds Execution: Dynamic Simulation of EIP-7999’s Multidimensional Fee Market.md`.
 
 Run the notebooks in order:
 

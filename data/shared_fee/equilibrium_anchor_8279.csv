@@ -1,0 +1,2 @@
+start_date,end_date_inclusive,days,blocks,floor_rate,applies_to_propagation_time_s,base_fee_ref_wei,base_fee_ref_gwei,q_execution_per_block,q_data_per_block,q_state_per_block,m_execution,m_data,m_state,m_data_7976_7981_baseline,incremental_m_data_8131,incremental_m_data_8279
+2026-02-01,2026-05-31,120,860505,96,3.0,106927843.5,0.1069278435,23942241.363434453,1180555.063054834,5244154.703798162,1.4479558695732846,4.032547620151323,5.656315259465248,1.968761648325156,1.12621943428084,0.9375665375453273

@@ -12,3 +12,4 @@ eth-keys
 eth-utils
 scipy
 statsmodels
+scikit-learn

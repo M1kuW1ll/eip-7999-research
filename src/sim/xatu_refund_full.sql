@@ -134,8 +134,8 @@ candidates AS
         valid_division AND nonzero_reset_base >= 0 AND k_min <= k_max AS feasible,
         reset_sum_base - 171 * k_max AS reset_sum_low,
         reset_sum_base - 171 * k_min AS reset_sum_high,
-        12500 * auth_refunds + 12480 * net_clears + 10000 * reset_sum_low AS refund_future_low,
-        12500 * auth_refunds + 12480 * net_clears + 10000 * reset_sum_high AS refund_future_high,
+        11616 * net_clears + 10000 * reset_sum_low AS refund_future_low,
+        11616 * net_clears + 10000 * reset_sum_high AS refund_future_high,
         abs(
             sstore_gas
             - (
@@ -202,7 +202,7 @@ metrics2 AS
         if(current_floor_proxy, receipt_gas, receipt_gas + current_refund_applied_cap_proxy) AS gross_current,
         if(current_floor_proxy, 0, current_refund_applied_cap_proxy) AS effective_refund_current,
         100 * (sstore_count - sstore_cold)
-            + 3000 * sstore_cold
+            + 2100 * sstore_cold
             + 10000 * (changed_slots + reset_sum) AS sstore_regular_future,
         97920 * new_slots AS storage_state_gas_future
     FROM metrics1

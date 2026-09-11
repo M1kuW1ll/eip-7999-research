@@ -1,0 +1,30 @@
+{
+  "affected_transaction_fraction": 0.06788847784021881,
+  "applies_to_propagation_time_s": 3.0,
+  "bootstrap_p05_p95_conditional_on_7976_7981_baseline": {
+    "m_data_8131_8279": {
+      "p05": 3.9481599342277907,
+      "p50": 4.035968184957177,
+      "p95": 4.115739795221055
+    }
+  },
+  "bootstrap_replications": 400,
+  "end_date_inclusive": "2026-05-31",
+  "execution_path": "transaction-specific EIP-8038+EIP-2780, daily reconciled",
+  "floor_rate": 96,
+  "full_anchor_blocks": 860505,
+  "incremental_gas_per_weighted_block": 1106848.9228499264,
+  "incremental_gas_share_of_regular_branch": 0.027502927511844213,
+  "incremental_m_data_8131": 1.12621943428084,
+  "incremental_m_data_8279": 0.9375665375453273,
+  "m_data_7976_7981_baseline": 1.968761648325156,
+  "m_data_8131_8279": 4.032547620151323,
+  "m_execution_current_eip8038": 1.4479558695732846,
+  "m_state_reused": 5.656315259465248,
+  "q_data_reference_per_block": 1180555.063054834,
+  "runtime_bal_byte_share_carried_by_affected_transactions": 0.15366142639950137,
+  "sampled_blocks": 6000,
+  "sampled_transactions": 1899748,
+  "start_date": "2026-02-01",
+  "uplift_share_already_or_close_to_static_floor": 0.6251949909269833
+}

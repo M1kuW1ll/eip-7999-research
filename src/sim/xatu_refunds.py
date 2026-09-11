@@ -269,8 +269,7 @@ def recover_eip8038_refunds(frame: pd.DataFrame) -> pd.DataFrame:
                     * (int(row.original_nonzero_changed) + nonzero_resets)
                 )
                 future_refund = (
-                    12_500 * auth_refunds
-                    + 12_480 * int(row.net_cleared_slots)
+                    11_616 * int(row.net_cleared_slots)
                     + 10_000 * (zero_resets + nonzero_resets)
                 )
                 solutions.append(

@@ -60,10 +60,10 @@ def test_recovers_clear_and_reset_refunds():
         "transaction_hash"
     )
 
-    assert result.loc["clear", "refund_counter_8038"] == 12_480
+    assert result.loc["clear", "refund_counter_8038"] == 11_616
     assert result.loc["zero-reset", "refund_counter_8038"] == 10_000
     assert result.loc["nonzero-reset", "refund_counter_8038"] == 10_000
-    assert result.loc["auth-reset", "refund_counter_8038"] == 22_500
+    assert result.loc["auth-reset", "refund_counter_8038"] == 10_000
     assert set(result["refund_identification"]) == {"unique"}
 
 

@@ -1,0 +1,2 @@
+workload_sha256,shape,floor_rate_range,transfer_gas_per_byte,cpsb_reference,reference_shared_limit,static_bytes_per_reference_data_gas
+2af918e3989c78a13c68bdd7c8f8e01df0e705a35ff9c0a0c81b115b41ecbec1,32x57600x4,"40, 50, and 64--96 inclusive",95.02262443438914,1530.0,150000000.0,0.11295316038895495

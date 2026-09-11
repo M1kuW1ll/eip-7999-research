@@ -1,0 +1,118 @@
+{
+  "created_at_utc": "2026-08-25T20:31:59.430564+00:00",
+  "purpose": "Protect the current working-tree EIP-7999 and Glamsterdam artifacts during the independent shared-fee experiment.",
+  "protected_roots": [
+    "src/dynamics/glamsterdam_replay.py",
+    "src/mechanisms/glamsterdam_only.py",
+    "src/mechanisms/configs.py",
+    "scripts/run_glamsterdam_comparison.py",
+    "scripts/run_mechanism_comparison.py",
+    "data/glamsterdam",
+    "data/7999/glamsterdam_comparison.csv",
+    "data/7999/mechanism_comparison.csv",
+    "plots/dynamic_mechanism_comparison.png",
+    "plots/dynamic_mechanism_frontier.png"
+  ],
+  "files": {
+    "data/7999/glamsterdam_comparison.csv": {
+      "sha256": "b401cc23521cdb162aa5a5a51e7cd3bb1eb6e41e2e3bc60e20114b5894a03eab",
+      "size_bytes": 2516
+    },
+    "data/7999/mechanism_comparison.csv": {
+      "sha256": "29ed459d7d7d6845ada930ed902ef8e7a4a476ff0364c17b4fff768aa90e87af",
+      "size_bytes": 11668
+    },
+    "data/glamsterdam/anchor_accounting_panel_2026-02-01_2026-05-31.csv": {
+      "sha256": "ab4017ee866afff4cadc1899b3f6b73c9db2ff466030fef71899d17fa351352f",
+      "size_bytes": 50034
+    },
+    "data/glamsterdam/daily_resource_panel_2025-01-01_2026-05-31.csv": {
+      "sha256": "65036149685f000c10817ccf5d7710b230ecddbc009a5a42213a48f940f807f9",
+      "size_bytes": 132168
+    },
+    "data/glamsterdam/effective_price_ranges.csv": {
+      "sha256": "34444a7a3cb876197ffa39b01f2f4ee0761d3e2941e07e54cbad3b75d338f68c",
+      "size_bytes": 1210
+    },
+    "data/glamsterdam/elasticity_ardl_robustness.csv": {
+      "sha256": "aa26383fb62b34bda36441ff9ff44fbf24b089afbdfc59487d2545484e60b9ec",
+      "size_bytes": 677
+    },
+    "data/glamsterdam/elasticity_event_estimates.csv": {
+      "sha256": "262d748382935a95b92a3242ae5170156f42b348d18b294680a4939da62ac53e",
+      "size_bytes": 713
+    },
+    "data/glamsterdam/elasticity_vectors.csv": {
+      "sha256": "34bc0215bc21b680ebed13de60af264060b81fe3e93cec819ae95936c67aa38a",
+      "size_bytes": 864
+    },
+    "data/glamsterdam/elasticity_window_grid.csv": {
+      "sha256": "57e14852490c92202022d87caf49ba3a5ec61a56b49f13a1849db65a37391598",
+      "size_bytes": 4628
+    },
+    "data/glamsterdam/equilibrium_anchor.csv": {
+      "sha256": "302ac776c1a182c60bc290daceef2c0f722f922788155c7a7bbcdb820c658858",
+      "size_bytes": 330
+    },
+    "data/glamsterdam/equilibrium_headline.csv": {
+      "sha256": "f525b7b0772ce0412ae350f97054bf688871e8eb0d2ce4280f4ff66724894bbc",
+      "size_bytes": 1015
+    },
+    "data/glamsterdam/equilibrium_results.csv": {
+      "sha256": "4aad9135802c6a5a86b281a91ff729691a8d36328461508ed528e60a0fc18a80",
+      "size_bytes": 7131
+    },
+    "data/glamsterdam/equilibrium_window_sensitivity.csv": {
+      "sha256": "d00c50649155f9d4bdfca574b85f5dc14da17f9127a396fdc705a45c2a80baf0",
+      "size_bytes": 11269
+    },
+    "data/glamsterdam/metering_accounting_components.csv": {
+      "sha256": "5797f94586484b9ac0cd0ac1165e04fa847ee2285099e1e1279f03ea5a93470b",
+      "size_bytes": 829
+    },
+    "data/glamsterdam/metering_multipliers.csv": {
+      "sha256": "7617cbe51df12d92b278ead5dbed1158132a6c28a597481fda5f4488847f2d12",
+      "size_bytes": 333
+    },
+    "data/glamsterdam/source_manifest.csv": {
+      "sha256": "42df45268107191c190bc6d347968f304fcd66e8472cc0331d7a7b0108b815db",
+      "size_bytes": 807
+    },
+    "data/glamsterdam/state_cap_sensitivity.csv": {
+      "sha256": "d8bbf745aa9a4bb651f37dc92f0444dc7f83fe68bed59d127bd3989c5a916811",
+      "size_bytes": 8339
+    },
+    "data/glamsterdam/state_cap_sweep.csv": {
+      "sha256": "8e5871bc662b35818d17fc064e195db0d01e2ba7869fd876319c8560478fcda6",
+      "size_bytes": 36198
+    },
+    "plots/dynamic_mechanism_comparison.png": {
+      "sha256": "3eb17718d703e7445b83679217e5dc5d46245afe7e921af877eca105340509af",
+      "size_bytes": 246788
+    },
+    "plots/dynamic_mechanism_frontier.png": {
+      "sha256": "2946148c9b5c8045de3d5e8f2e8c77bfa4b9d4ce73c879ba87df3e30c56e11aa",
+      "size_bytes": 161862
+    },
+    "scripts/run_glamsterdam_comparison.py": {
+      "sha256": "e2228d766c53c1266357610b350679bc167f4a72122b4be9d584ac04b2d77191",
+      "size_bytes": 8909
+    },
+    "scripts/run_mechanism_comparison.py": {
+      "sha256": "8f4f76bebb86eb18cbab1db717ded0fe81550e0ff69469063bc2cdc8b6ce3d63",
+      "size_bytes": 22190
+    },
+    "src/dynamics/glamsterdam_replay.py": {
+      "sha256": "4a662099366b728e0ab392d669e992f3cd0293054125f1ff6a32dff916b99efc",
+      "size_bytes": 9699
+    },
+    "src/mechanisms/configs.py": {
+      "sha256": "a658ccb95239726fb9101543aa8843da150eff4f25526e301d5b014b9895fcf9",
+      "size_bytes": 8377
+    },
+    "src/mechanisms/glamsterdam_only.py": {
+      "sha256": "2efe6bd5948d3d8879a203099511c3fc29fb76dfd5c1184dcc70e808fa50e556",
+      "size_bytes": 3106
+    }
+  }
+}

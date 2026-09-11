@@ -20,6 +20,39 @@ data/7999/*
 !data/7999/mechanism_comparison.csv
 !data/7999/stage_c_one_at_a_time.csv
 !data/7999/block_length_sensitivity.csv
+!data/shared_fee/
+data/shared_fee/*
+!data/shared_fee/frozen_artifact_manifest.json
+!data/shared_fee/eip8279_block_uplift.csv
+!data/shared_fee/eip8279_floor_activation_by_class.csv
+!data/shared_fee/eip8279_floor_activation_by_static_content_decile.csv
+!data/shared_fee/eip8279_floor_activation_by_state_creating_status.csv
+!data/shared_fee/eip8279_floor_activation_by_contract_deployment.csv
+!data/shared_fee/eip8279_floor_activation_by_transaction_type.csv
+!data/shared_fee/state_creating_tx_bal_floor_coverage.csv
+!data/shared_fee/data_multiplier_bootstrap.csv
+!data/shared_fee/eip8279_data_multiplier.json
+!data/shared_fee/equilibrium_anchor_8279.csv
+!data/shared_fee/shared_fee_8279_slot_scenarios.csv
+!data/shared_fee/shared_fee_8279_limit_sweep.csv
+!data/shared_fee/shared_fee_8279_candidates.csv
+!data/shared_fee/shared_fee_workload_manifest.csv
+!data/shared_fee/shared_fee_8279_state_cap_sensitivity.csv
+!data/shared_fee/shared_fee_8279_state_cap_sensitivity_paths.csv
+!data/shared_fee/shared_vs_7999_by_slot_split.csv
+!data/shared_fee/shared_vs_7999_physical_capacity.csv
+!data/shared_fee/floor_rate_multiplier_sweep.csv
+!data/shared_fee/floor_rate_multiplier_bootstrap.csv
+!data/shared_fee/floor_rate_activation_by_class.csv
+!data/shared_fee/equilibrium_anchor_by_floor_rate.csv
+!data/shared_fee/shared_fee_factorial_scenarios.csv
+!data/shared_fee/shared_fee_factorial_paths.csv
+!data/shared_fee/shared_fee_factorial_designs.csv
+!data/shared_fee/shared_fee_factorial_candidates.csv
+!data/shared_fee/shared_fee_factorial_manifest.csv
+!data/shared_fee/shared_fee_optimized_state_tail.csv
+!data/shared_fee/shared_fee_optimized_state_tail_paths.csv
+!data/shared_fee/shared_fee_optimized_comparison.csv
 *.parquet
 
 # Superseded research material retained locally only
@@ -71,6 +104,30 @@ markdowns/demand_model_plan.md
 !/plots/slot_time_delivered_execution_grid.png
 !/plots/slot_time_fixed_designs.png
 !/plots/slot_time_outcome_tradeoffs.png
+!/plots/shared_fee_8279_multiplier_bridge.png
+!/plots/shared_fee_8279_floor_activation.png
+!/plots/shared_fee_8279_block_uplift.png
+!/plots/shared_fee_8279_safe_limits.png
+!/plots/shared_fee_8279_limit_sweep.png
+!/plots/shared_fee_8279_dynamic_pressure.png
+!/plots/shared_fee_8279_state_cap_sensitivity.png
+!/plots/shared_fee_8279_three_arm_throughput.png
+!/plots/shared_fee_8279_three_arm_execution_state.png
+!/plots/shared_fee_floor_rate_multiplier.png
+!/plots/shared_fee_optimized_floor_schedule.png
+!/plots/shared_fee_optimized_factorial.png
+!/plots/shared_fee_optimized_state_tail.png
+!/plots/shared_fee_optimized_comparison.png
+!/plots/shared_fee_comparison_execution_paired_dot.png
+!/plots/shared_fee_elasticity_execution_state.png
+!/plots/shared_fee_proposal_state_tail.png
+!/plots/shared_fee_eip8372_central.png
+!/plots/shared_fee_elasticity_performance.png
+!/plots/shared_fee_elasticity_state_growth.png
+!/plots/shared_fee_elasticity_equilibrium_fee.png
+!/plots/shared_fee_elasticity_execution_gains.png
+!/plots/shared_fee_eip8372_frozen_elasticities.png
+!/plots/shared_fee_eip8372_resource_pulses.png
 
 # Contiguous empirical shock panels are large regenerable pulls; the builder
 # scripts and the block ranges in the manifest reproduce them.

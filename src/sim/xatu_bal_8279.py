@@ -165,6 +165,9 @@ def compute_eip8279_runtime_bytes(frame: pd.DataFrame) -> pd.DataFrame:
     out["balance_selfdestruct_bytes_8279"] = (
         BAL_BYTES_PER_BALANCE * out["positive_value_selfdestructs"]
     )
+    # The structlog account-access query excludes CREATE and CREATE2, so the
+    # created address is added here exactly once rather than being included in
+    # ``cold_account_accesses`` as well.
     out["create_address_bytes_8279"] = BAL_BYTES_PER_ADDRESS * out["internal_creates"]
     out["create_nonce_bytes_8279"] = BAL_BYTES_PER_NONCE * out["internal_creates"]
     out["create_endowment_bytes_8279"] = (
@@ -217,6 +220,7 @@ def compute_eip8279_runtime_block_bytes(frame: pd.DataFrame) -> pd.DataFrame:
     out["balance_selfdestruct_bytes_8279"] = (
         BAL_BYTES_PER_BALANCE * out["positive_value_selfdestructs"]
     )
+    # The structlog account-access query excludes CREATE and CREATE2.
     out["create_address_bytes_8279"] = BAL_BYTES_PER_ADDRESS * out["internal_creates"]
     out["create_nonce_bytes_8279"] = BAL_BYTES_PER_NONCE * out["internal_creates"]
     out["create_endowment_bytes_8279"] = (
@@ -810,7 +814,7 @@ def attach_normalized_composite_costs(
     gas_inputs: pd.DataFrame,
     *,
     cpsb: int = 1530,
-    execution_multiplier: float = 1.537898,
+    execution_multiplier: float = 1.4479558695732846,
     data_multiplier: float = 1.798834,
     state_multiplier: float = 5.656315,
     data_gas_per_byte: int = 16,
