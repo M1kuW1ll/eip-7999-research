@@ -1,4 +1,5 @@
 """Checks for full-vector selection, paired gains, and frozen central designs."""
+import pytest
 from pathlib import Path
 import json
 import runpy
@@ -179,33 +180,48 @@ def test_new_figures_plot_complete_vectors_and_nan_for_unavailable(monkeypatch):
             plt.close(fig)
 
 
-def test_main_comparison_has_five_unrestricted_series(monkeypatch):
+def test_main_comparison_has_six_unrestricted_series(monkeypatch):
     import matplotlib.pyplot as plt
     render = runpy.run_path(str(ROOT / "scripts/shared_fee/make_figures.py"))["paired_dot_comparison"]
     figures = []
-    monkeypatch.setitem(render.__globals__, "save", lambda fig, name: figures.append((fig, name)))
+    monkeypatch.setitem(render.__globals__, "save", lambda fig, name, **kwargs: figures.append((fig, name)))
     render()
     source = pd.concat([pd.read_csv(OUT / "shared_fee_elasticity_comparison.csv"),
                         pd.read_csv(OUT / "eip8372/normalized_outcomes.csv")])
+    target_ratios = pd.read_csv(OUT / "eip8372_target_ratio/outcomes.csv")
+    four_fifths = target_ratios[target_ratios.ratio_label.eq("4/5")].copy()
+    four_fifths["benchmark"] = "normalized_state_four_fifths"
+    source = pd.concat([source, four_fifths])
     source = source[source.window_days.eq(35)]
     try:
         fig, name = figures[0]
         assert name == "shared_fee_comparison_execution_paired_dot.png"
         ax = fig.axes[0]
-        assert len(ax.lines) == 5  # Five unrestricted families; no capped points.
-        for line, family in zip(ax.lines, ("proposal_faithful", "fully_optimized", "normalized_state", "balanced", "maximum"), strict=True):
+        assert len(ax.lines) == 6  # Six unrestricted designs; no capped points.
+        for line, family in zip(ax.lines, ("proposal_faithful", "fully_optimized", "normalized_state", "normalized_state_four_fifths", "maximum", "balanced"), strict=True):
             group = source[source.benchmark.eq(family)].sort_values("propagation_time_s")
             np.testing.assert_array_equal(line.get_xdata(), group.metered_execution_gas / 1e6)
             np.testing.assert_array_equal(line.get_ydata(), np.arange(5))
-        assert [line.get_label().split("\n")[0] for line in ax.lines[:3]] == [
-            "Baseline", "Floor-adjusted + EIP-8368", "Floor-adjusted + EIP-8372"]
+        assert [line.get_label().replace("\n", " ") for line in ax.lines] == [
+            "Baseline", "One-dimensional EIP-8368",
+            "One-dimensional EIP-8372, 1/2 target ratio",
+            "One-dimensional EIP-8372, 4/5 target ratio",
+            "EIP-7999 max throughput", "EIP-7999 conservative"]
         assert all(line.get_fillstyle() == "full" for line in ax.lines)
         assert ax.get_ylim()[0] < ax.get_ylim()[1]
+        assert fig.get_figwidth() <= 12 and fig.get_figheight() <= 7.2
+        assert ax.xaxis.label.get_fontsize() >= 20
+        assert ax.yaxis.label.get_fontsize() >= 20
+        assert min(t.get_fontsize() for t in ax.get_xticklabels() + ax.get_yticklabels()) >= 19
+        assert min(t.get_fontsize() for t in ax.texts) >= 18
+        assert len(fig.legends) == 1
+        assert min(t.get_fontsize() for t in fig.legends[0].get_texts()) >= 18
     finally:
         for fig, _ in figures:
             plt.close(fig)
 
 
+@pytest.mark.skipif(not (Path(__file__).resolve().parents[1] / 'markdowns/eip8279_floor_calibration_report.md').exists(), reason='Private report prose is excluded from the review artifact.')
 def test_report_tables_reproduce_from_outputs_and_link_unrestricted_figure():
     tables = runpy.run_path(str(ROOT / "scripts/shared_fee/elasticity_report_tables.py"))["report_tables"]()
     report = (ROOT / "markdowns/eip8279_floor_calibration_report.md").read_text()

@@ -1,21 +1,10 @@
 # Bundle-priced EIP-7999 dynamic-simulation notebooks
 
-These four notebooks reproduce the tables and figures in
-`markdowns/When Data Binds Execution: Dynamic Simulation of EIP-7999’s Multidimensional Fee Market.md`.
-
-Run the notebooks in order:
-
-| Notebook | Report results reproduced |
-|---|---|
-| `01-demand-shocks.ipynb` | Three parent-demand shocks, BAL access-composition shock, multiscale bootstrap, normalization and source diagnostics |
-| `02-simulation-and-target-grid.ipynb` | Fixed $L_E=2T_E$ target grid, E300-row results, and the three target-grid heatmaps |
-| `03-slot-time-allocation.ipynb` | Physical execution/data limits, E300/D80 slot-time diagnostic, maximum-throughput candidates, and historically anchored candidates |
-| `04-sensitivity-analysis.ipynb` | 36-case fixed-design sensitivity, eight full selection surfaces, sensitivity figures, and the two-regime summary |
-
-The former `notebooks/simulation/2.5-full-7999-bundle-priced-dynamic-replay.ipynb`
-was an exploratory predecessor that explicitly did not reproduce the report. It
-is preserved under `archived/notebooks/simulation/` and is not part of this
-workflow.
+These notebooks document the exploratory research workflow. For the paper’s
+current strict selection, frozen inputs, and automated checks, start with
+[the reproduction guide](../../reproducibility/README.md). Some exploratory
+grids and selection criteria differ from the final paper; they are retained
+for provenance and are not the paper reproduction entry point.
 
 ## Upstream publication inputs
 

@@ -13,3 +13,4 @@ eth-utils
 scipy
 statsmodels
 scikit-learn
+pytest

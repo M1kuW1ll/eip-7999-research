@@ -32,9 +32,14 @@ plt.rcParams.update(
 )
 
 
-def save(fig: plt.Figure, name: str) -> None:
+def save(fig: plt.Figure, name: str, *, pdf: bool = False) -> None:
     PLOTS.mkdir(parents=True, exist_ok=True)
-    fig.savefig(PLOTS / name, bbox_inches="tight", pil_kwargs={"optimize": True})
+    fig.savefig(PLOTS / name, bbox_inches="tight", pad_inches=.05 if pdf else .1,
+                pil_kwargs={"optimize": True})
+    if pdf:
+        destination = ROOT / "output/pdf" / Path(name).with_suffix(".pdf")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(destination, bbox_inches="tight", pad_inches=.05)
     plt.close(fig)
 
 
@@ -740,41 +745,63 @@ def optimized_comparison() -> None:
             save(fig, f"shared_fee_comparison_{specification[3]}.png")
 
 
-def paired_dot_comparison() -> None:
-    """Five unrestricted benchmarks on the same central workload paths."""
+def paired_dot_comparison(*, include_reference_benchmarks: bool = True) -> None:
+    """Central design comparison, optionally focused on EIP-8372 and EIP-7999."""
     data = pd.read_csv(DATA / "shared_fee_elasticity_comparison.csv")
     normalized = pd.read_csv(DATA / "eip8372/normalized_outcomes.csv")
+    target_ratios = pd.read_csv(DATA / "eip8372_target_ratio/outcomes.csv")
+    four_fifths = target_ratios[target_ratios.ratio_label.eq("4/5")].copy()
+    four_fifths["benchmark"] = "normalized_state_four_fifths"
+    four_fifths["available"] = True
     benchmarks = (
-        ("proposal_faithful", "#737373", "^", "Baseline\none-dimensional"),
-        ("fully_optimized", "#54a24b", "D", "Floor-adjusted + EIP-8368\none-dimensional"),
-        ("normalized_state", "#148878", "P", "Floor-adjusted + EIP-8372\none-dimensional"),
-        ("balanced", "#f58518", "s", "EIP-7999 multi-dimensional\nhistorically anchored"),
-        ("maximum", "#4c78a8", "o", "EIP-7999 multi-dimensional\nmaximum throughput"),
+        ("proposal_faithful", "#737373", "^", "Baseline"),
+        ("fully_optimized", "#54a24b", "D", "One-dimensional\nEIP-8368"),
+        ("normalized_state", "#148878", "P", "One-dimensional EIP-8372,\n1/2 target ratio"),
+        ("normalized_state_four_fifths", "#9467bd", "X", "One-dimensional EIP-8372,\n4/5 target ratio"),
+        ("maximum", "#4c78a8", "o", "EIP-7999\nmax throughput"),
+        ("balanced", "#f58518", "s", "EIP-7999\nconservative"),
     )
-    data = pd.concat([data, normalized], ignore_index=True)
+    if not include_reference_benchmarks:
+        focused_labels = {
+            "normalized_state": "One-dimensional normalized, 1/2 ratio",
+            "normalized_state_four_fifths": "One-dimensional normalized, 4/5 ratio",
+            "balanced": "Multi-dimensional, conservative",
+            "maximum": "Multi-dimensional, max throughput",
+        }
+        benchmarks = tuple(
+            (benchmark, color, marker, focused_labels[benchmark])
+            for benchmark, color, marker, _ in benchmarks[2:]
+        )
+    data = pd.concat([data, normalized, four_fifths], ignore_index=True)
     data = data[data.window_days.eq(35) & data.available
                 & data.benchmark.isin([item[0] for item in benchmarks])].copy()
-    assert len(data) == 25
+    assert len(data) == 5 * len(benchmarks)
     assert not data.duplicated(["benchmark", "propagation_time_s"]).any()
     propagation = np.array([3.0, 3.5, 4.0, 4.5, 5.0])
     rows = np.arange(len(propagation))
     means = {}
 
-    with plt.rc_context({"savefig.dpi": 180, "xtick.labelsize": 14,
-                         "ytick.labelsize": 14, "legend.fontsize": 14}):
-        fig, ax = plt.subplots(figsize=(14, 9))
+    with plt.rc_context({"savefig.dpi": 300, "axes.labelsize": 20,
+                         "xtick.labelsize": 19, "ytick.labelsize": 19,
+                         "legend.fontsize": 18, "pdf.fonttype": 42,
+                         "axes.linewidth": .8}):
+        fig, ax = plt.subplots(
+            figsize=(12, 7.2) if include_reference_benchmarks else (10.5, 5.6)
+        )
         for benchmark, color, marker, label in benchmarks:
             selected = data[data.benchmark.eq(benchmark)].set_index("propagation_time_s").loc[propagation]
             mean = selected.metered_execution_gas.to_numpy() / 1e6
             means[benchmark] = mean
             ax.plot(mean, rows, linestyle="none", marker=marker, color=color,
-                    markersize=8, label=label, zorder=4)
+                    markersize=10 if benchmark == "normalized_state_four_fifths" else 8,
+                    label=label, zorder=4)
             for value, row in zip(mean, rows, strict=True):
                 # Opposite label positions separate the near-equal EIP-8372 and
-                # historically anchored EIP-7999 points at three seconds.
-                offset = .11 if benchmark in ("proposal_faithful", "balanced") else -.12
-                ax.text(value, row + offset, f"{value:.1f}", color=color,
-                        ha="center", va="bottom" if offset > 0 else "top", fontsize=14)
+                # conservative EIP-7999 points at three and five seconds.
+                offset = 8 if benchmark in ("proposal_faithful", "balanced") else -8
+                ax.annotate(f"{value:.1f}", (value, row), xytext=(0, offset),
+                            textcoords="offset points", color=color, ha="center",
+                            va="bottom" if offset > 0 else "top", fontsize=18)
 
         for start, end, color in (
             ("normalized_state", "balanced", "#f58518"),
@@ -784,29 +811,36 @@ def paired_dot_comparison() -> None:
             assert np.all(gain > 0)
             ax.hlines(rows, means[start], means[end], color=color,
                       linewidth=2.5, alpha=0.5, zorder=2)
-            for left, right, difference, row in zip(
-                means[start], means[end], gain, rows, strict=True
-            ):
-                ax.text((left + right) / 2, row + .34, f"+{difference:.1f}",
-                        color=color, ha="center", va="bottom", fontsize=14)
 
         ax.set_yticks(rows, [f"{t:.1f}" for t in propagation])
-        ax.set_ylim(-.5, len(rows) - .35)
-        ax.set_xlim(0, 310)
-        ax.set_xticks(np.arange(0, 301, 50))
-        ax.set_xlabel("mean execution gas usage per block (M)")
-        ax.set_ylabel("propagation time (s)")
+        ax.set_ylim(-.4, len(rows) - .45)
+        # This is a point chart: trim unused range without changing any data.
+        ax.set_xlim(50 if include_reference_benchmarks else 140, 285)
+        ax.set_xticks(np.arange(50, 251, 50) if include_reference_benchmarks
+                      else np.arange(150, 276, 25))
+        ax.set_xlabel("Mean execution gas usage per block (M)", labelpad=6)
+        ax.set_ylabel("Propagation time (s)", labelpad=6)
         ax.set_axisbelow(True)
-        ax.grid(axis="x", alpha=.2)
+        ax.grid(axis="x", alpha=.16, linewidth=.7)
         ax.spines[["top", "right"]].set_visible(False)
-        # Three one-dimensional families above the two EIP-7999 selections.
+        # A single compact legend groups each family vertically by column.
         handles, labels = ax.get_legend_handles_labels()
-        fig.legend(handles[:3], labels[:3], loc="upper center",
-                   bbox_to_anchor=(.5, 1.0), ncol=3, frameon=False)
-        fig.legend(handles[3:], labels[3:], loc="upper center",
-                   bbox_to_anchor=(.5, .90), ncol=2, frameon=False)
-        fig.subplots_adjust(left=.10, right=.98, bottom=.10, top=.77)
-        save(fig, "shared_fee_comparison_execution_paired_dot.png")
+        if not include_reference_benchmarks:
+            legend_order = [0, 1, 3, 2]
+            handles = [handles[index] for index in legend_order]
+            labels = [labels[index] for index in legend_order]
+        fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(.54, .995),
+                   ncol=3 if include_reference_benchmarks else 2,
+                   frameon=False, borderaxespad=0, borderpad=0,
+                   handlelength=1, handletextpad=.45,
+                   columnspacing=1.2 if include_reference_benchmarks else 3.0,
+                   labelspacing=.45)
+        fig.subplots_adjust(left=.09, right=.985,
+                            bottom=.13 if include_reference_benchmarks else .16,
+                            top=.79 if include_reference_benchmarks else .875)
+        name = ("shared_fee_comparison_execution_paired_dot.png" if include_reference_benchmarks
+                else "shared_fee_comparison_execution_paired_dot_8372_7999.png")
+        save(fig, name, pdf=True)
 
 
 def elasticity_robustness_figures() -> None:
@@ -992,6 +1026,7 @@ def main() -> None:
     optimized_state_tail()
     optimized_comparison()
     paired_dot_comparison()
+    paired_dot_comparison(include_reference_benchmarks=False)
     elasticity_comparison()
     elasticity_robustness_figures()
     elasticity_state_growth_figure()

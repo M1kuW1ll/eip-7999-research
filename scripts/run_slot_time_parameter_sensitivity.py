@@ -45,13 +45,16 @@ from run_slot_time_scenarios import (  # noqa: E402
     build_workload,
     limits_for,
 )
+from summarize_slot_time_candidates import (  # noqa: E402
+    HISTORICAL_NEAR_LIMIT_TOLERANCE_MULTIPLIER,
+    HISTORICAL_TARGET_DEVIATION_TOLERANCE_MULTIPLIER,
+)
 
 WINDOWS = (21, 35, 60, 75)
 LAMBDA_GRID = (0.0, 0.5, 1.0)
 RHO_A_GRID = (0.75, 1.0, 1.25)
 CENTRAL = (35, 0.0, 1.0)
 E300_D80 = (300e6, 80e6)
-HISTORICAL_TOLERANCE_MULTIPLIER = 1.20
 
 
 def specification_table() -> pd.DataFrame:
@@ -430,10 +433,10 @@ def selection_tables(surface: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]
     historical = pd.read_csv(
         ROOT / "data/7999/historical_fee_market_benchmark.csv"
     ).iloc[0]
-    near_limit_ceiling = HISTORICAL_TOLERANCE_MULTIPLIER * float(
+    near_limit_ceiling = HISTORICAL_NEAR_LIMIT_TOLERANCE_MULTIPLIER * float(
         historical.near_limit_fraction
     )
-    deviation_ceiling = HISTORICAL_TOLERANCE_MULTIPLIER * float(
+    deviation_ceiling = HISTORICAL_TARGET_DEVIATION_TOLERANCE_MULTIPLIER * float(
         historical.mean_absolute_target_deviation
     )
     maximum_rows = []

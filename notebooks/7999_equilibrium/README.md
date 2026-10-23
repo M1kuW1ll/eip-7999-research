@@ -1,24 +1,10 @@
 # EIP-7999 publication notebooks
 
-These notebooks reproduce the quantitative results and figures in:
-
-- `markdowns/bundle_priced_bal_demand_model_report.md`; and
-- `markdowns/bundle_priced_7999_equilibrium_report.md`.
-
-Run them in order from the repository root:
-
-1. `01-data-metering-runtime-bal.ipynb` reconstructs current and
-   counterfactual static-data metering, builds the deterministic 6,000-block
-   EIP-8279 runtime sample, and estimates the runtime-BAL anchor.
-2. `02-bal-decomposition.ipynb` attributes runtime bytes to direct state
-   creation, co-produced access, and non-state transactions, then derives the
-   BAL intensities used in bundle-priced parent demand. It also carries
-   forward the execution and state metering multipliers calculated by
-   `../resource_demand_and_glamsterdam_equilibrium/02-metering-multipliers.ipynb`.
-3. `03-bundle-priced-equilibrium.ipynb` solves the active-set EIP-7999
-   equilibrium, execution fee-floor frontier, capacity grid, and robustness
-   cases using those metering multipliers and the elasticities estimated by
-   `../resource_demand_and_glamsterdam_equilibrium/03-demand-model-elasticity.ipynb`.
+These notebooks document the exploratory research workflow. For the paper’s
+current strict selection, frozen inputs, and automated checks, start with
+[the reproduction guide](../../reproducibility/README.md). Some exploratory
+grids and selection criteria differ from the final paper; they are retained
+for provenance and are not the paper reproduction entry point.
 
 ## Data refresh
 

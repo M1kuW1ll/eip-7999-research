@@ -53,6 +53,10 @@ data/shared_fee/*
 !data/shared_fee/shared_fee_optimized_state_tail.csv
 !data/shared_fee/shared_fee_optimized_state_tail_paths.csv
 !data/shared_fee/shared_fee_optimized_comparison.csv
+!data/shared_fee/eip8372_target_ratio/
+data/shared_fee/eip8372_target_ratio/*
+!data/shared_fee/eip8372_target_ratio/*.csv
+!data/shared_fee/eip8372_target_ratio/*.json
 *.parquet
 
 # Superseded research material retained locally only
@@ -70,8 +74,14 @@ __pycache__/
 .claude/
 .matplotlib-cache/
 
-markdowns/questions.md
-markdowns/demand_model_plan.md
+# Private writing, reviews, and local exports are not part of the review artifact.
+/markdowns/
+/manuscript_independent/
+/paper/
+/output/
+/.junie/
+/.pytest_cache/
+/reproducibility/results/
 
 # Generated plots. Keep only figures used by canonical reports in Git.
 /plots/*
@@ -128,6 +138,14 @@ markdowns/demand_model_plan.md
 !/plots/shared_fee_elasticity_execution_gains.png
 !/plots/shared_fee_eip8372_frozen_elasticities.png
 !/plots/shared_fee_eip8372_resource_pulses.png
+!/plots/shared_fee_eip8372_target_ratio.png
+!/plots/shared_fee_eip8372_target_ratio.pdf
+!/plots/shared_fee_eip8372_target_ratio_update_diagnostic.png
+!/plots/shared_fee_eip8372_target_ratio_update_diagnostic.pdf
+!/plots/shared_fee_eip8372_target_ratio_tradeoffs.png
+!/plots/shared_fee_eip8372_target_ratio_tradeoffs.pdf
+!/plots/shared_fee_eip8372_target_ratio_dumbbell.png
+!/plots/shared_fee_eip8372_target_ratio_dumbbell.pdf
 
 # Contiguous empirical shock panels are large regenerable pulls; the builder
 # scripts and the block ranges in the manifest reproduce them.

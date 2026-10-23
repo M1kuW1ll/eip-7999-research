@@ -1,4 +1,5 @@
 """Focused report figures, unchanged-source diagnostics, and section scope."""
+import pytest
 import hashlib
 import json
 from pathlib import Path
@@ -80,6 +81,7 @@ def test_integer_downward_update_threshold_examples():
                                   [20, 19, 80, 79])
 
 
+@pytest.mark.skipif(not (Path(__file__).resolve().parents[1] / 'markdowns/eip8279_floor_calibration_report.md').exists(), reason='Private report prose is excluded from the review artifact.')
 def test_report_keeps_primary_fixed_design_comparison_separate_from_reselection():
     report = (ROOT/'markdowns/eip8279_floor_calibration_report.md').read_text()
     main, appendix = report.split('## Appendix:', 1)

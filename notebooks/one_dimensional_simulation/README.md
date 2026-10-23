@@ -1,15 +1,10 @@
 # One-dimensional simulation: report reproduction
 
-Run these four notebooks in order to reproduce the central results,
-sensitivities, tables, and figures in
-[One-dimensional vs. Multi-dimensional Fee Market: The Case for Ethereum](../../markdowns/eip8279_floor_calibration_report.md).
-
-| Notebook | Results |
-|---|---|
-| [01 — Baseline simulation](01-baseline-simulation.ipynb) | Xatu input pulls, transaction-floor accounting, the 64-gas data multiplier, and baseline equilibria and simulation |
-| [02 — Floor-adjusted + EIP-8368](02-floor-adjusted-eip8368.ipynb) | Physical limit and floor-rate derivation, rate-specific data multipliers, matched CPSB, simulations, floor/CPSB attribution, and shared baseline/EIP-8368 sensitivities |
-| [03 — Floor-adjusted + EIP-8372](03-floor-adjusted-eip8372.ipynb) | CPSB and state-limit-scale calibration, normalized-counter simulations, elasticity and state-tail sensitivity, deployment capacity, rounding checks, and resource pulses |
-| [04 — Comparison with EIP-7999](04-comparison-with-7999.ipynb) | Main five-row comparison table, all propagation allocations, paired gains, sensitivity tables, and comparison figures |
+These notebooks document the exploratory research workflow. For the paper’s
+current strict selection, frozen inputs, and automated checks, start with
+[the reproduction guide](../../reproducibility/README.md). Some exploratory
+grids and selection criteria differ from the final paper; they are retained
+for provenance and are not the paper reproduction entry point.
 
 ## Prerequisites and source reconstruction
 

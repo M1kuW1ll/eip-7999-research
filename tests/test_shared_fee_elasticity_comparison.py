@@ -41,29 +41,80 @@ def test_execution_gain_figure_pairs_workload_replications():
         summarize(missing)
 
 
-def test_paired_dot_gaps_use_eip8372_reference_and_no_error_bars(monkeypatch):
+def test_paired_dot_connectors_keep_reference_without_gain_labels_or_error_bars(monkeypatch):
     import runpy
     import matplotlib.pyplot as plt
 
     render = runpy.run_path(str(ROOT / "scripts/shared_fee/make_figures.py"))["paired_dot_comparison"]
     saved = []
-    monkeypatch.setitem(render.__globals__, "save", lambda fig, name: saved.append((fig, name)))
+    monkeypatch.setitem(render.__globals__, "save", lambda fig, name, **kwargs: saved.append((fig, name)))
     render()
     fig, _ = saved[0]
     try:
         ax = fig.axes[0]
         assert len(ax.containers) == 0
-        assert len(fig.legends) == 2
+        assert len(fig.legends) == 1
         source = pd.concat([pd.read_csv(OUT / "shared_fee_elasticity_comparison.csv"),
                             pd.read_csv(OUT / "eip8372/normalized_outcomes.csv")])
         central = source[source.window_days.eq(35)]
         values = central.pivot(index="propagation_time_s", columns="benchmark", values="metered_execution_gas")
-        expected = pd.concat([values.balanced - values.normalized_state,
-                              values.maximum - values.balanced]) / 1e6
+        assert len(ax.collections) == 2
+        for collection, start, end in zip(
+            ax.collections, ("normalized_state", "balanced"),
+            ("balanced", "maximum"), strict=True
+        ):
+            expected = np.array([
+                [[left / 1e6, row], [right / 1e6, row]]
+                for row, (left, right) in enumerate(zip(values[start], values[end], strict=True))
+            ])
+            np.testing.assert_allclose(collection.get_segments(), expected)
         labels = [text.get_text() for text in ax.texts if text.get_text().startswith("+")]
-        assert labels == [f"+{value:.1f}" for value in expected]
+        assert labels == []
+        assert len(ax.texts) == 30
+        assert ax.get_xlabel() == "Mean execution gas usage per block (M)"
+        assert ax.get_ylabel() == "Propagation time (s)"
     finally:
         plt.close(fig)
+
+
+def test_focused_paired_dot_preserves_four_series_and_uses_separate_output(monkeypatch):
+    import runpy
+    import matplotlib.pyplot as plt
+
+    render = runpy.run_path(str(ROOT / "scripts/shared_fee/make_figures.py"))["paired_dot_comparison"]
+    saved = []
+    monkeypatch.setitem(render.__globals__, "save", lambda fig, name, **kwargs: saved.append((fig, name)))
+    render()
+    render(include_reference_benchmarks=False)
+    full, full_name = saved[0]
+    focused, focused_name = saved[1]
+    try:
+        assert full_name == "shared_fee_comparison_execution_paired_dot.png"
+        assert focused_name == "shared_fee_comparison_execution_paired_dot_8372_7999.png"
+        ax = focused.axes[0]
+        assert len(ax.lines) == 4
+        assert len(ax.texts) == 20
+        assert not any(text.get_text().startswith("+") for text in ax.texts)
+        assert len(ax.containers) == 0
+        focused_labels = (
+            "One-dimensional normalized, 1/2 ratio",
+            "One-dimensional normalized, 4/5 ratio",
+            "Multi-dimensional, max throughput",
+            "Multi-dimensional, conservative",
+        )
+        for original, retained, label in zip(full.axes[0].lines[2:], ax.lines,
+                                             focused_labels, strict=True):
+            np.testing.assert_array_equal(original.get_xydata(), retained.get_xydata())
+            assert retained.get_label() == label
+            assert original.get_color() == retained.get_color()
+            assert original.get_marker() == retained.get_marker()
+        legend = [text.get_text() for text in focused.legends[0].get_texts()]
+        assert len(legend) == 4
+        assert not any("Baseline" in label or "8368" in label for label in legend)
+        assert ax.get_xlim() == (140, 285)
+    finally:
+        plt.close(full)
+        plt.close(focused)
 
 
 def test_window_comparison_keeps_all_design_slots_and_missing_candidates():

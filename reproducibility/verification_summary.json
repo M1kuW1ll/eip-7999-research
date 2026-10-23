@@ -1,0 +1,38 @@
+{
+  "date": "2026-10-23",
+  "python": "3.13.9",
+  "platform": "Darwin",
+  "architecture": "arm64",
+  "tests": {
+    "passed": 298,
+    "skipped": 7,
+    "skip_reason": "Checks of prose in private reports excluded from the artifact.",
+    "elapsed_seconds": 17.49
+  },
+  "clean_export_without_existing_data": true,
+  "central_replay": {
+    "selection_checked": true,
+    "near_limit_tolerance_multiplier": 1.0,
+    "target_deviation_filter": false,
+    "central_candidate_count": 301,
+    "replay_completed": true,
+    "workload_sha256": "2af918e3989c78a13c68bdd7c8f8e01df0e705a35ff9c0a0c81b115b41ecbec1",
+    "full_central_grid_replayed": true,
+    "paired_path_count": 480,
+    "elapsed_seconds": 263.6500409169821
+  },
+  "appendix_replay": {
+    "normalized_four_fifths_and_fake_exponential_all_elasticities": true,
+    "maximum_selections_all_elasticities": true,
+    "fixed_600m_90m_configurations": 49,
+    "e275_sensitivity_configurations": 28
+  },
+  "input_file_count": 588,
+  "input_parts": 13,
+  "maximum_input_part_bytes": 7000000,
+  "original_chain_measurements_refetched": false,
+  "independent_anonymous_mirror_download_tested": false,
+  "verification_scope": "Fresh simulation replay from captured measurements. Lower-target diagnostic tables contain fewer metrics; every available reference metric is checked.",
+  "final_staged_export_verified": true,
+  "full_command_elapsed_seconds": 263.6500409169821
+}

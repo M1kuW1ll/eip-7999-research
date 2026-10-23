@@ -7,8 +7,9 @@ execution.  It also applies a 99%-of-maximum rule across slot splits and records
 the marginal changes for the fixed E300/D80 diagnostic.
 
 The script separately defines a balanced-design benchmark.  It allows the
-fraction of blocks at or above 98% of either hard limit and the mean absolute
-execution distance from target to be at most 120% of their historical values.
+fraction of blocks at or above 98% of either hard limit to be at most 125% of
+its historical value.  The mean absolute execution distance from target
+retains its ceiling of 120% of the historical value.
 It also requires the central reserve-free execution equilibrium to clear
 strictly above the one-wei protocol minimum.
 
@@ -26,7 +27,8 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "data/7999/slot_time_scenarios.csv"
 HISTORICAL_SOURCE = ROOT / "data/7999/historical_fee_market_benchmark.csv"
-HISTORICAL_TOLERANCE_MULTIPLIER = 1.20
+HISTORICAL_NEAR_LIMIT_TOLERANCE_MULTIPLIER = 1.25
+HISTORICAL_TARGET_DEVIATION_TOLERANCE_MULTIPLIER = 1.20
 MINIMUM_EXECUTION_BASE_FEE_WEI = 1.0
 INTERIOR_FEE_TOLERANCE_WEI = 1e-6
 STATE_TARGET = 75_000_000.0
@@ -231,10 +233,10 @@ def main() -> None:
     ]
 
     near_limit_ceiling = (
-        HISTORICAL_TOLERANCE_MULTIPLIER * historical["near_limit_fraction"]
+        HISTORICAL_NEAR_LIMIT_TOLERANCE_MULTIPLIER * historical["near_limit_fraction"]
     )
     target_deviation_ceiling = (
-        HISTORICAL_TOLERANCE_MULTIPLIER
+        HISTORICAL_TARGET_DEVIATION_TOLERANCE_MULTIPLIER
         * historical["mean_absolute_target_deviation"]
     )
     historical_admissible = data[
@@ -247,7 +249,10 @@ def main() -> None:
         & data["execution_equilibrium_is_interior"]
     ].copy()
     historical_admissible["historical_tolerance_multiplier"] = (
-        HISTORICAL_TOLERANCE_MULTIPLIER
+        HISTORICAL_NEAR_LIMIT_TOLERANCE_MULTIPLIER
+    )
+    historical_admissible["historical_target_deviation_tolerance_multiplier"] = (
+        HISTORICAL_TARGET_DEVIATION_TOLERANCE_MULTIPLIER
     )
     historical_admissible["historical_near_limit_ceiling"] = near_limit_ceiling
     historical_admissible[
