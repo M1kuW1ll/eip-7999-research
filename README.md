@@ -1,4 +1,4 @@
-# Ethereum resource pricing: review artifact
+# Ethereum resource pricing and fee mechanisms 
 
 This repository compares one-dimensional and multi-dimensional fee mechanisms
 under empirical Ethereum demand and shared propagation/execution constraints.
